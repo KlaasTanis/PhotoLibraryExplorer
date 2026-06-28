@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhotoLibraryExplorer</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f5f5f5;
+}
+header {
+    background: #1f2937;
+    color: white;
+    padding: 14px 18px;
+}
+nav {
+    background: white;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 4px #ccc;
+}
+nav button {
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: #e5e7eb;
+    font-size: 15px;
+}
+nav button.active {
+    background: #2563eb;
+    color: white;
+}
+section {
+    display: none;
+    padding: 14px;
+}
+section.active {
+    display: block;
+}
+#map {
+    width: 100%;
+    height: calc(100vh - 135px);
+}
+.panel {
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+input[type=text] {
+    width: 95%;
+    padding: 8px;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+th, td {
+    border-bottom: 1px solid #ddd;
+    padding: 7px;
+    text-align: left;
+}
+th {
+    background: #eee;
+    position: sticky;
+    top: 0;
+}
+.card {
+    background: white;
+    padding: 14px;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h2>PhotoLibraryExplorer</h2>
+<div>Persoonlijke kaart van je fotobibliotheek</div>
+</header>
+
+<nav>
+<button class="active" onclick="showTab('kaart', this)">ð Kaart</button>
+<button onclick="showTab('plaatsen', this)">ð Plaatsen</button>
+<button onclick="showTab('top', this)">ð Top 100</button>
+<button onclick="showTab('stats', this)">ð Statistiek</button>
+</nav>
+
+<section id="kaart" class="active">
+<div class="panel">
+Zoek:<br>
+<input id="mapFilter" type="text" placeholder="plaats, provincie of land">
+<br><br>
+Min. betrouwbaarheid:
+<input id="minconf" type="range" min="0" max="100" value="0">
+<span id="minconfval">0</span>
+<br>
+<span id="mapCount"></span>
+</div>
+<div id="map"></div>
+</section>
+
+<section id="plaatsen">
+<div class="panel">
+<input id="placeFilter" type="text" placeholder="Zoek plaats, provincie of land">
+</div>
+<table>
+<thead>
+<tr>
+<th>Land</th><th>Provincie</th><th>Plaats</th><th>Totaal</th><th>GPS</th><th>Geschat</th><th>Betrouwbaarheid</th>
+</tr>
+</thead>
+<tbody id="placesBody"></tbody>
+</table>
+</section>
+
+<section id="top">
+<table>
+<thead>
+<tr>
+<th>#</th><th>Plaats</th><th>Provincie</th><th>Land</th><th>Totaal</th>
+</tr>
+</thead>
+<tbody id="topBody"></tbody>
+</table>
+</section>
+
+<section id="stats">
+<div id="statsBox"></div>
+</section>
+
+<script>
+var PLAATSEN = [
+{land:'België',provincie:'Limburg',plaats:'Hamont-Achel',eerste:'2024-08-20 13:52:35',laatste:'2024-08-20 15:13:44',gps:3,geschat:1,totaal:4,betrouwbaarheid:45.0,lat:51.2986666666667,lon:5.48866666666667},
+{land:'België',provincie:'Oost-Vlaanderen',plaats:'Gent',eerste:'2019-05-18 11:57:40',laatste:'2019-05-18 14:35:15',gps:14,geschat:0,totaal:14,betrouwbaarheid:100.0,lat:51.0554285714286,lon:3.71992857142857},
+{land:'België',provincie:'Oost-Vlaanderen',plaats:'Nazareth',eerste:'2023-10-01 16:50:55',laatste:'2023-10-01 16:50:55',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:50.97,lon:3.607},
+{land:'België',provincie:'West-Vlaanderen',plaats:'Brugge',eerste:'2019-05-19 11:07:08',laatste:'2019-05-19 17:54:59',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:51.2082727272727,lon:3.22563636363636},
+{land:'Canada',provincie:'Ontario',plaats:'Niagara Falls',eerste:'2015-05-27 15:30:44',laatste:'2015-05-29 04:00:27',gps:104,geschat:52,totaal:156,betrouwbaarheid:63.5,lat:43.0858846153846,lon:-79.0758750000001},
+{land:'China',provincie:'Hongkong',plaats:'Hongkong',eerste:'2015-10-20 04:53:33',laatste:'2015-10-20 10:51:56',gps:6,geschat:4,totaal:10,betrouwbaarheid:30.0,lat:22.2396666666667,lon:114.183},
+{land:'China',provincie:'Kowloon',plaats:'Hongkong',eerste:'2015-10-20 12:05:56',laatste:'2015-10-20 13:41:48',gps:5,geschat:1,totaal:6,betrouwbaarheid:23.0,lat:22.2932,lon:114.1698},
+{land:'China',provincie:'',plaats:'东城区',eerste:'2015-10-07 11:07:52',laatste:'2015-10-07 11:07:52',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:39.9,lon:116.412},
+{land:'Denemarken',provincie:'Zuid-Denemarken',plaats:'Esbjerg',eerste:'2022-06-23 12:53:32',laatste:'2022-06-23 16:44:03',gps:9,geschat:15,totaal:24,betrouwbaarheid:65.0,lat:55.5181111111111,lon:8.36111111111111},
+{land:'Denemarken',provincie:'Zuid-Denemarken',plaats:'Esbjerg Kommune',eerste:'2022-06-21 18:36:29',laatste:'2022-06-21 18:54:00',gps:3,geschat:10,totaal:13,betrouwbaarheid:54.4,lat:55.329,lon:8.76333333333333},
+{land:'Denemarken',provincie:'Zuid-Denemarken',plaats:'Varde Kommune',eerste:'2022-06-11 17:03:14',laatste:'2022-06-25 08:08:12',gps:105,geschat:98,totaal:203,betrouwbaarheid:78.9,lat:55.6668285714286,lon:8.29635238095238},
+{land:'Duitsland',provincie:'Nedersaksen',plaats:'Dötlingen',eerste:'2022-06-25 13:35:34',laatste:'2022-06-25 13:35:34',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.915,lon:8.426},
+{land:'Duitsland',provincie:'Noordrijn-Westfalen',plaats:'Oberhausen',eerste:'2014-10-28 13:07:57',laatste:'2014-10-28 14:11:09',gps:17,geschat:21,totaal:38,betrouwbaarheid:39.3,lat:51.4940588235294,lon:6.88088235294118},
+{land:'Duitsland',provincie:'Sleeswijk-Holstein',plaats:'Kiel',eerste:'2019-06-08 18:44:02',laatste:'2019-06-08 20:41:17',gps:16,geschat:1,totaal:17,betrouwbaarheid:100.0,lat:54.3349375,lon:10.169},
+{land:'Estland',provincie:'Harju maakond',plaats:'Harju maakond',eerste:'2019-06-18 08:20:28',laatste:'2019-06-18 09:32:00',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:59.47425,lon:24.76275},
+{land:'Estland',provincie:'Harju maakond',plaats:'Harku vald',eerste:'2019-06-16 13:47:02',laatste:'2019-06-16 13:51:02',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:59.42,lon:24.322},
+{land:'Estland',provincie:'Harju maakond',plaats:'Lääne-Harju vald',eerste:'2019-06-16 12:41:48',laatste:'2019-06-16 13:23:16',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:59.3958181818182,lon:24.2952727272727},
+{land:'Estland',provincie:'Harju maakond',plaats:'Tallinn',eerste:'2019-06-16 15:41:52',laatste:'2019-06-17 16:10:31',gps:57,geschat:46,totaal:103,betrouwbaarheid:95.1,lat:59.4371578947368,lon:24.746701754386},
+{land:'Estland',provincie:'Lääne maakond',plaats:'Haapsalu linn',eerste:'2019-06-16 10:36:51',laatste:'2019-06-16 10:56:33',gps:14,geschat:0,totaal:14,betrouwbaarheid:100.0,lat:58.9472142857143,lon:23.5396428571429},
+{land:'Estland',provincie:'Pärnu maakond',plaats:'Pärnu linn',eerste:'2019-06-14 14:37:32',laatste:'2019-06-15 14:34:50',gps:34,geschat:9,totaal:43,betrouwbaarheid:96.8,lat:58.3786764705882,lon:24.4953529411765},
+{land:'Estland',provincie:'Pärnu maakond',plaats:'Pärnu maakond',eerste:'2019-06-14 16:59:03',laatste:'2019-06-15 15:03:27',gps:5,geschat:1,totaal:6,betrouwbaarheid:37.0,lat:58.3714,lon:24.5052},
+{land:'Finland',provincie:'Uusimaa',plaats:'Helsinki',eerste:'2019-06-18 10:11:13',laatste:'2019-06-18 20:24:58',gps:55,geschat:30,totaal:85,betrouwbaarheid:79.3,lat:60.1583272727273,lon:24.9600727272727},
+{land:'Finland',provincie:'Uusimaa',plaats:'Raseborg',eerste:'2019-06-19 10:49:40',laatste:'2019-06-19 12:11:08',gps:2,geschat:1,totaal:3,betrouwbaarheid:23.0,lat:59.977,lon:23.432},
+{land:'Finland',provincie:'Zuidwest-Finland',plaats:'Pargas',eerste:'2019-06-21 21:10:54',laatste:'2019-06-21 23:19:02',gps:15,geschat:23,totaal:38,betrouwbaarheid:47.0,lat:60.1046,lon:21.2041333333333},
+{land:'Finland',provincie:'Zuidwest-Finland',plaats:'Turku',eerste:'2019-06-19 14:34:08',laatste:'2019-06-21 19:04:23',gps:63,geschat:12,totaal:75,betrouwbaarheid:94.3,lat:60.4422857142857,lon:22.2491746031746},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Bromont-Lamothe',eerste:'2026-05-24 15:30:39',laatste:'2026-05-24 15:31:55',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:45.85,lon:2.8396},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Châteauneuf-du-Rhône',eerste:'2024-05-05 17:52:31',laatste:'2024-05-05 18:52:40',gps:1,geschat:2,totaal:3,betrouwbaarheid:37.0,lat:44.522,lon:4.744},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Orcines',eerste:'2014-09-22 11:32:04',laatste:'2014-09-22 12:15:54',gps:4,geschat:21,totaal:25,betrouwbaarheid:59.5,lat:45.785,lon:3.049},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Solaize',eerste:'2026-04-25 16:40:37',laatste:'2026-04-25 16:40:37',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:45.652,lon:4.836},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Valence',eerste:'2025-09-07 22:13:02',laatste:'2025-09-07 22:13:02',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:44.9,lon:4.886},
+{land:'Frankrijk',provincie:'Auvergne-Rhône-Alpes',plaats:'Vézelin-sur-Loire',eerste:'2026-05-24 16:50:54',laatste:'2026-05-24 16:50:54',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:45.857,lon:4.043},
+{land:'Frankrijk',provincie:'Bourgondië-Franche-Comté',plaats:'Autun',eerste:'2014-09-22 16:06:47',laatste:'2014-09-22 19:00:57',gps:30,geschat:139,totaal:169,betrouwbaarheid:94.1,lat:46.9443,lon:4.30223333333334},
+{land:'Frankrijk',provincie:'Bourgondië-Franche-Comté',plaats:'Beaune',eerste:'2024-05-28 18:31:08',laatste:'2024-05-28 20:07:43',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:47.007,lon:4.845},
+{land:'Frankrijk',provincie:'Bourgondië-Franche-Comté',plaats:'Chaintré',eerste:'2023-06-27 18:45:02',laatste:'2024-09-30 20:36:55',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:46.2563333333333,lon:4.792},
+{land:'Frankrijk',provincie:'Bourgondië-Franche-Comté',plaats:'Fontaines',eerste:'2024-05-05 15:24:19',laatste:'2024-05-05 15:31:03',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:46.862,lon:4.821},
+{land:'Frankrijk',provincie:'Bourgondië-Franche-Comté',plaats:'Saint-Martin-Belle-Roche',eerste:'2024-10-01 10:05:06',laatste:'2024-10-01 10:06:02',gps:1,geschat:1,totaal:2,betrouwbaarheid:45.0,lat:46.388,lon:4.852},
+{land:'Frankrijk',provincie:'Centre-Val de Loire',plaats:'Chambray-lès-Tours',eerste:'2022-09-24 19:25:04',laatste:'2022-09-24 19:25:04',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:47.34,lon:0.704},
+{land:'Frankrijk',provincie:'Centre-Val de Loire',plaats:'Veigné',eerste:'2018-09-17 17:31:49',laatste:'2018-09-17 20:48:03',gps:50,geschat:0,totaal:50,betrouwbaarheid:100.0,lat:47.29442,lon:0.68446},
+{land:'Frankrijk',provincie:'Centre-Val de Loire',plaats:'Vierzon',eerste:'2021-09-23 18:56:55',laatste:'2025-05-31 19:23:09',gps:26,geschat:0,totaal:26,betrouwbaarheid:100.0,lat:47.2355,lon:2.0835},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Balléville',eerste:'2025-10-06 11:41:55',laatste:'2025-10-06 11:41:55',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:48.334,lon:5.855},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Châtenois',eerste:'2025-10-06 11:41:06',laatste:'2025-10-06 11:41:06',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:48.319,lon:5.855},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Courcelles-en-Montagne',eerste:'2026-04-25 13:44:43',laatste:'2026-04-25 13:44:43',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:47.844,lon:5.232},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Fameck',eerste:'2026-04-25 10:36:23',laatste:'2026-04-25 10:36:27',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:49.312,lon:6.0995},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Harmonville',eerste:'2025-10-06 11:53:52',laatste:'2025-10-06 11:53:52',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:48.483,lon:5.898},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Hayange',eerste:'2026-04-25 10:33:27',laatste:'2026-04-25 10:34:35',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:49.3285,lon:6.056},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Loisy',eerste:'2023-06-28 13:34:20',laatste:'2023-06-28 13:34:26',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:48.861,lon:6.092},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Mardor',eerste:'2026-04-25 13:42:07',laatste:'2026-04-25 13:42:07',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:47.89,lon:5.223},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Saint-Ciergues',eerste:'2026-04-25 13:43:19',laatste:'2026-04-25 13:43:19',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:47.869,lon:5.22},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Selaincourt',eerste:'2025-10-06 11:54:12',laatste:'2025-10-06 11:54:35',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:48.4915,lon:5.905},
+{land:'Frankrijk',provincie:'Grand Est',plaats:'Woippy',eerste:'2026-04-25 10:52:44',laatste:'2026-04-25 11:46:53',gps:1,geschat:2,totaal:3,betrouwbaarheid:29.0,lat:49.18,lon:6.176},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Béost',eerste:'2024-09-29 13:26:05',laatste:'2026-05-23 15:08:31',gps:37,geschat:3,totaal:40,betrouwbaarheid:76.3,lat:42.976,lon:-0.340297297297297},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Chauray',eerste:'2014-09-03 18:02:43',laatste:'2023-09-07 20:51:55',gps:3,geschat:1,totaal:4,betrouwbaarheid:45.0,lat:46.3516666666667,lon:-0.394666666666667},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Ciboure',eerste:'2019-09-09 13:47:12',laatste:'2019-09-09 13:47:12',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.382,lon:-1.644},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Cézac',eerste:'2023-09-30 15:29:24',laatste:'2023-09-30 15:29:24',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:45.067,lon:-0.461},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Eaux-Bonnes',eerste:'2026-05-23 15:14:40',laatste:'2026-05-23 15:16:19',gps:3,geschat:1,totaal:4,betrouwbaarheid:55.0,lat:42.969,lon:-0.337},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'La Crèche',eerste:'2014-09-03 18:03:08',laatste:'2019-09-23 19:34:07',gps:17,geschat:14,totaal:31,betrouwbaarheid:73.5,lat:46.351,lon:-0.344117647058824},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Laruns',eerste:'2024-09-29 12:03:30',laatste:'2026-05-23 13:25:27',gps:16,geschat:0,totaal:16,betrouwbaarheid:100.0,lat:42.8709375,lon:-0.4065625},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Limoges',eerste:'2021-09-03 19:06:00',laatste:'2025-05-09 19:05:33',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:45.8743333333333,lon:1.28133333333333},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Niort',eerste:'2023-09-30 17:33:40',laatste:'2023-09-30 20:25:43',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:46.3393333333333,lon:-0.401},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Saint-André-de-Cubzac',eerste:'2023-09-08 10:54:24',laatste:'2023-09-08 10:54:24',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:44.978,lon:-0.432},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Saint-Jean-de-Luz',eerste:'2019-09-09 13:47:03',laatste:'2019-09-09 13:47:03',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.384,lon:-1.644},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Sarlat-la-Canéda',eerste:'2014-09-21 17:43:04',laatste:'2014-09-21 21:43:37',gps:12,geschat:24,totaal:36,betrouwbaarheid:95.0,lat:44.9290833333333,lon:1.20458333333333},
+{land:'Frankrijk',provincie:'Nieuw-Aquitanië',plaats:'Urrugne',eerste:'2018-09-03 13:37:48',laatste:'2018-09-03 14:39:41',gps:5,geschat:2,totaal:7,betrouwbaarheid:23.0,lat:43.3688,lon:-1.6818},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Aspin-Aure',eerste:'2024-09-29 16:57:55',laatste:'2024-09-29 17:05:29',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:42.9420909090909,lon:0.327454545454545},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Bagnères-de-Bigorre',eerste:'2024-09-29 15:47:17',laatste:'2026-05-23 18:41:38',gps:22,geschat:0,totaal:22,betrouwbaarheid:100.0,lat:42.909,lon:0.154454545454545},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Barèges',eerste:'2024-09-29 15:48:17',laatste:'2026-05-23 18:30:41',gps:30,geschat:0,totaal:30,betrouwbaarheid:100.0,lat:42.908,lon:0.145},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Chaum',eerste:'2021-09-04 13:22:19',laatste:'2021-09-04 13:31:31',gps:4,geschat:1,totaal:5,betrouwbaarheid:45.0,lat:42.93225,lon:0.66025},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Estancarbon',eerste:'2024-09-29 18:39:31',laatste:'2026-05-23 19:56:06',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:43.1148,lon:0.7576},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Fos',eerste:'2021-09-04 13:44:46',laatste:'2021-09-23 11:35:06',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.868,lon:0.7385},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Le Boulou',eerste:'2023-06-12 11:33:07',laatste:'2023-06-12 11:33:21',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.539,lon:2.8415},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Montalzat',eerste:'2026-05-24 11:58:05',laatste:'2026-05-24 12:24:40',gps:1,geschat:1,totaal:2,betrouwbaarheid:37.0,lat:44.232,lon:1.529},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Muret',eerste:'2025-05-10 12:40:17',laatste:'2025-05-10 12:40:17',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.427,lon:1.305},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Nadillac',eerste:'2025-05-10 11:19:04',laatste:'2025-05-10 11:19:04',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:44.558,lon:1.516},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Noé',eerste:'2025-05-10 12:45:19',laatste:'2025-05-10 12:45:19',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.354,lon:1.268},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Roquefort-sur-Garonne',eerste:'2025-05-10 13:32:51',laatste:'2025-05-10 13:33:30',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:43.1526666666667,lon:0.964333333333333},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Saint-Béat-Lez',eerste:'2021-09-04 13:31:15',laatste:'2021-09-04 13:31:15',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:42.919,lon:0.686},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Salses-le-Château',eerste:'2023-06-12 10:51:45',laatste:'2026-04-26 10:42:25',gps:2,geschat:13,totaal:15,betrouwbaarheid:37.9,lat:42.854,lon:2.944},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Sers',eerste:'2024-09-29 15:37:35',laatste:'2024-09-29 15:39:03',gps:4,geschat:1,totaal:5,betrouwbaarheid:45.0,lat:42.911,lon:0.139},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Tresserre',eerste:'2023-06-12 11:31:32',laatste:'2023-06-12 11:31:32',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.566,lon:2.844},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Trouillas',eerste:'2023-06-12 11:25:07',laatste:'2023-06-12 11:25:07',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.608,lon:2.852},
+{land:'Frankrijk',provincie:'Occitanië',plaats:'Ussel',eerste:'2025-05-10 11:16:41',laatste:'2025-05-10 11:16:41',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:44.598,lon:1.508},
+{land:'Frankrijk',provincie:'Île-de-France',plaats:'Janvry',eerste:'2018-09-02 14:22:32',laatste:'2018-09-02 14:22:32',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:48.637,lon:2.147},
+{land:'Frankrijk',provincie:'Île-de-France',plaats:'Sèvres',eerste:'2025-06-01 11:51:39',laatste:'2025-06-01 12:47:55',gps:2,geschat:1,totaal:3,betrouwbaarheid:29.0,lat:48.824,lon:2.2215},
+{land:'Ierland',provincie:'Kenmare Municipal District',plaats:'County Kerry',eerste:'2017-06-19 12:08:24',laatste:'2017-06-23 16:26:23',gps:138,geschat:7,totaal:145,betrouwbaarheid:57.0,lat:51.9312028985507,lon:-10.1908405797101},
+{land:'Ierland',provincie:'Killarney Municipal District',plaats:'County Kerry',eerste:'2017-06-17 15:11:50',laatste:'2017-06-23 19:31:19',gps:81,geschat:27,totaal:108,betrouwbaarheid:78.1,lat:52.039962962963,lon:-9.51843209876543},
+{land:'Ierland',provincie:'Leinster',plaats:'Dublin',eerste:'2017-06-25 12:46:31',laatste:'2017-06-25 16:53:57',gps:20,geschat:10,totaal:30,betrouwbaarheid:65.7,lat:53.35295,lon:-6.2628},
+{land:'Ierland',provincie:'Munster',plaats:'Cork',eerste:'2017-06-17 13:18:14',laatste:'2017-06-17 16:00:45',gps:9,geschat:7,totaal:16,betrouwbaarheid:92.9,lat:51.8997777777778,lon:-8.47511111111111},
+{land:'Ierland',provincie:'The Borough District of Wexford',plaats:'County Wexford',eerste:'2017-06-16 19:17:18',laatste:'2017-06-16 21:35:29',gps:7,geschat:2,totaal:9,betrouwbaarheid:64.5,lat:52.3398571428571,lon:-6.464},
+{land:'Ierland',provincie:'The Municipal District of Arklow',plaats:'County Wicklow',eerste:'2017-06-24 15:28:27',laatste:'2017-06-26 18:07:21',gps:17,geschat:4,totaal:21,betrouwbaarheid:75.8,lat:52.8537058823529,lon:-6.33029411764706},
+{land:'Ierland',provincie:'The Municipal District of Dungarvan — Lismore',plaats:'County Waterford',eerste:'2017-06-17 10:56:51',laatste:'2017-06-24 14:11:28',gps:18,geschat:2,totaal:20,betrouwbaarheid:87.0,lat:52.1158333333333,lon:-7.85616666666666},
+{land:'Ierland',provincie:'The Municipal District of Wicklow',plaats:'County Wicklow',eerste:'2017-06-26 15:47:19',laatste:'2017-06-27 09:24:54',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:53.094,lon:-6.247},
+{land:'Ierland',provincie:'West Cork',plaats:'County Cork',eerste:'2017-06-21 13:45:38',laatste:'2017-06-24 15:26:00',gps:38,geschat:6,totaal:44,betrouwbaarheid:46.0,lat:51.6665,lon:-10.0352368421053},
+{land:'Ierland',provincie:'',plaats:'',eerste:'2017-06-16 15:58:42',laatste:'2017-06-20 13:15:39',gps:6,geschat:3,totaal:9,betrouwbaarheid:65.0,lat:52.013,lon:-8.83583333333333},
+{land:'Letland',provincie:'',plaats:'',eerste:'2019-06-11 09:40:08',laatste:'2019-06-11 09:41:09',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:56.154,lon:21.023},
+{land:'Letland',provincie:'',plaats:'Dienvidkurzemes novads',eerste:'2019-06-11 09:35:40',laatste:'2019-06-12 09:36:29',gps:14,geschat:0,totaal:14,betrouwbaarheid:100.0,lat:56.3750714285714,lon:21.287},
+{land:'Letland',provincie:'',plaats:'Kuldīga',eerste:'2019-06-12 10:24:34',laatste:'2019-06-12 12:50:50',gps:14,geschat:3,totaal:17,betrouwbaarheid:55.3,lat:56.9686428571429,lon:21.971},
+{land:'Letland',provincie:'',plaats:'Liepāja',eerste:'2019-06-11 12:08:13',laatste:'2019-06-11 19:44:53',gps:62,geschat:6,totaal:68,betrouwbaarheid:94.7,lat:56.5095483870968,lon:21.0068064516129},
+{land:'Letland',provincie:'',plaats:'Riga',eerste:'2019-06-12 16:17:16',laatste:'2019-06-13 17:17:38',gps:71,geschat:32,totaal:103,betrouwbaarheid:96.7,lat:56.9498450704226,lon:24.1140281690141},
+{land:'Letland',provincie:'',plaats:'Sigulda',eerste:'2019-06-14 09:45:54',laatste:'2019-06-14 10:27:14',gps:13,geschat:0,totaal:13,betrouwbaarheid:100.0,lat:57.1680769230769,lon:24.8298461538462},
+{land:'Litouwen',provincie:'Klaipėda district',plaats:'',eerste:'2019-06-10 13:56:06',laatste:'2019-06-10 16:51:30',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:55.4392857142857,lon:21.0728571428571},
+{land:'Litouwen',provincie:'Klaipėda district',plaats:'Klaipėda',eerste:'2019-06-09 18:40:38',laatste:'2019-06-10 22:09:49',gps:34,geschat:6,totaal:40,betrouwbaarheid:59.2,lat:55.7118529411765,lon:21.1290588235294},
+{land:'Litouwen',provincie:'Klaipėda district',plaats:'Neringa',eerste:'2019-06-10 13:43:19',laatste:'2019-06-10 16:52:15',gps:23,geschat:1,totaal:24,betrouwbaarheid:100.0,lat:55.3395652173913,lon:21.0165652173913},
+{land:'Nederland',provincie:'Drenthe',plaats:'Emmen',eerste:'2016-09-02 09:05:57',laatste:'2016-09-02 15:28:33',gps:75,geschat:31,totaal:106,betrouwbaarheid:95.7,lat:52.7812933333333,lon:6.88753333333333},
+{land:'Nederland',provincie:'Drenthe',plaats:'Meppel',eerste:'2018-07-12 11:47:48',laatste:'2018-07-12 12:13:15',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:52.7155,lon:6.157},
+{land:'Nederland',provincie:'Fryslân',plaats:'Burgwerd',eerste:'2014-06-13 12:25:22',laatste:'2014-06-13 12:47:55',gps:4,geschat:3,totaal:7,betrouwbaarheid:42.3,lat:53.0925,lon:5.551},
+{land:'Nederland',provincie:'Fryslân',plaats:'Formerum',eerste:'2014-06-09 11:11:36',laatste:'2014-06-10 11:32:36',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:53.3828,lon:5.3318},
+{land:'Nederland',provincie:'Fryslân',plaats:'Harlingen',eerste:'2014-06-06 12:44:28',laatste:'2014-06-06 15:28:03',gps:8,geschat:3,totaal:11,betrouwbaarheid:75.7,lat:53.186,lon:5.349625},
+{land:'Nederland',provincie:'Fryslân',plaats:'Hoorn',eerste:'2014-06-08 11:14:32',laatste:'2014-06-09 11:07:08',gps:3,geschat:10,totaal:13,betrouwbaarheid:45.0,lat:53.3986666666667,lon:5.34466666666667},
+{land:'Nederland',provincie:'Fryslân',plaats:'Lies',eerste:'2014-06-12 11:40:06',laatste:'2014-06-12 11:40:06',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:53.398,lon:5.32},
+{land:'Nederland',provincie:'Fryslân',plaats:'Oosterend',eerste:'2014-06-06 16:33:18',laatste:'2014-06-12 19:05:07',gps:93,geschat:17,totaal:110,betrouwbaarheid:76.2,lat:53.4113225806452,lon:5.39138709677419},
+{land:'Nederland',provincie:'Fryslân',plaats:'Striep',eerste:'2014-06-09 11:22:48',laatste:'2014-06-09 11:40:43',gps:3,geschat:2,totaal:5,betrouwbaarheid:72.5,lat:53.3786666666667,lon:5.29533333333333},
+{land:'Nederland',provincie:'Fryslân',plaats:'Warns',eerste:'2014-06-13 15:26:11',laatste:'2014-06-13 15:59:10',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:52.852,lon:5.411},
+{land:'Nederland',provincie:'Fryslân',plaats:'West-Terschelling',eerste:'2014-06-06 15:37:07',laatste:'2014-06-10 12:51:06',gps:15,geschat:0,totaal:15,betrouwbaarheid:100.0,lat:53.344,lon:5.21493333333333},
+{land:'Nederland',provincie:'Gelderland',plaats:'Acquoy',eerste:'2015-04-21 13:01:57',laatste:'2015-04-21 13:58:26',gps:1,geschat:5,totaal:6,betrouwbaarheid:32.2,lat:51.879,lon:5.138},
+{land:'Nederland',provincie:'Gelderland',plaats:'Almen',eerste:'2018-12-26 19:44:03',laatste:'2018-12-26 21:53:07',gps:4,geschat:2,totaal:6,betrouwbaarheid:33.0,lat:52.157,lon:6.3015},
+{land:'Nederland',provincie:'Gelderland',plaats:'Apeldoorn',eerste:'2015-08-27 13:28:49',laatste:'2017-08-24 16:02:59',gps:59,geschat:1,totaal:60,betrouwbaarheid:37.0,lat:52.2302711864407,lon:5.94147457627119},
+{land:'Nederland',provincie:'Gelderland',plaats:'Bronkhorst',eerste:'2016-09-02 17:06:45',laatste:'2023-12-18 10:47:08',gps:28,geschat:16,totaal:44,betrouwbaarheid:73.9,lat:52.0763214285714,lon:6.17889285714286},
+{land:'Nederland',provincie:'Gelderland',plaats:'Brummen',eerste:'2016-09-03 15:18:00',laatste:'2016-09-03 16:17:09',gps:1,geschat:1,totaal:2,betrouwbaarheid:29.0,lat:52.082,lon:6.171},
+{land:'Nederland',provincie:'Gelderland',plaats:'Lochem',eerste:'2023-03-16 10:35:16',laatste:'2023-03-16 10:35:16',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.151,lon:6.415},
+{land:'Nederland',provincie:'Gelderland',plaats:'Nederhemert',eerste:'2015-04-21 15:23:15',laatste:'2015-04-21 15:23:15',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.768,lon:5.174},
+{land:'Nederland',provincie:'Gelderland',plaats:'Olburgen',eerste:'2016-09-03 12:36:05',laatste:'2016-09-03 13:49:08',gps:6,geschat:1,totaal:7,betrouwbaarheid:23.0,lat:52.0376666666667,lon:6.13733333333333},
+{land:'Nederland',provincie:'Gelderland',plaats:'Zutphen',eerste:'2023-12-17 14:41:30',laatste:'2023-12-17 14:49:32',gps:5,geschat:1,totaal:6,betrouwbaarheid:45.0,lat:52.1428,lon:6.1972},
+{land:'Nederland',provincie:'Limburg',plaats:'Bergen',eerste:'2022-07-06 14:50:23',laatste:'2022-07-06 14:52:38',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.598,lon:6.0255},
+{land:'Nederland',provincie:'Limburg',plaats:'Blitterswijck',eerste:'2022-07-06 15:47:16',laatste:'2022-07-06 15:47:22',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.532,lon:6.119},
+{land:'Nederland',provincie:'Limburg',plaats:'Landgraaf',eerste:'2020-07-31 15:07:58',laatste:'2020-07-31 15:07:58',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:50.905,lon:5.995},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Aarle-Rixtel',eerste:'2016-08-27 13:35:56',laatste:'2021-03-03 14:05:06',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:51.5036666666667,lon:5.63833333333333},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Bakel',eerste:'2015-10-01 13:10:00',laatste:'2015-10-01 13:41:12',gps:2,geschat:1,totaal:3,betrouwbaarheid:29.0,lat:51.514,lon:5.725},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Bergeijk',eerste:'2016-12-06 13:56:45',laatste:'2016-12-06 14:04:04',gps:5,geschat:1,totaal:6,betrouwbaarheid:45.0,lat:51.3274,lon:5.363},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Berlicum',eerste:'2020-08-04 11:50:25',laatste:'2020-08-04 13:04:57',gps:1,geschat:1,totaal:2,betrouwbaarheid:23.0,lat:51.672,lon:5.386},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Best',eerste:'2013-07-17 11:52:42',laatste:'2026-06-21 17:07:22',gps:2137,geschat:578,totaal:2715,betrouwbaarheid:75.2,lat:51.4914950865708,lon:5.39495648104844},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Biest-Houtakker',eerste:'2014-08-12 15:06:44',laatste:'2014-08-12 15:22:34',gps:11,geschat:1,totaal:12,betrouwbaarheid:100.0,lat:51.5162727272727,lon:5.15},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Boxtel',eerste:'2014-05-19 15:35:39',laatste:'2025-11-07 15:40:08',gps:78,geschat:4,totaal:82,betrouwbaarheid:82.2,lat:51.6004999999999,lon:5.31783333333334},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Breda',eerste:'2014-07-03 15:59:26',laatste:'2014-07-03 16:32:43',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:51.5594,lon:4.7844},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Budel',eerste:'2024-08-20 14:19:06',laatste:'2024-08-20 14:19:36',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.286,lon:5.524},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Diessen',eerste:'2014-04-17 11:12:53',laatste:'2019-04-23 15:52:47',gps:5,geschat:1,totaal:6,betrouwbaarheid:37.0,lat:51.457,lon:5.17},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Drimmelen',eerste:'2014-05-21 13:12:29',laatste:'2014-07-04 14:45:26',gps:31,geschat:1,totaal:32,betrouwbaarheid:100.0,lat:51.7456451612903,lon:4.76674193548387},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Eersel',eerste:'2015-07-02 21:12:49',laatste:'2015-07-02 21:33:24',gps:5,geschat:3,totaal:8,betrouwbaarheid:37.0,lat:51.355,lon:5.318},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Eindhoven',eerste:'2014-03-02 14:18:26',laatste:'2026-06-09 11:11:48',gps:122,geschat:30,totaal:152,betrouwbaarheid:38.8,lat:51.4588278688524,lon:5.45419672131148},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Esbeek',eerste:'2018-06-19 15:06:09',laatste:'2018-06-19 15:06:16',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.464,lon:5.1325},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Esch',eerste:'2022-08-28 11:25:28',laatste:'2022-08-28 11:25:42',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:51.603,lon:5.289},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Galder',eerste:'2016-09-13 11:21:29',laatste:'2016-09-13 12:42:43',gps:1,geschat:4,totaal:5,betrouwbaarheid:26.0,lat:51.517,lon:4.788},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Geldrop',eerste:'2018-03-09 13:20:26',laatste:'2024-03-29 13:02:19',gps:7,geschat:3,totaal:10,betrouwbaarheid:30.3,lat:51.4212857142857,lon:5.54471428571429},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Gemert',eerste:'2016-06-15 12:29:33',laatste:'2016-06-15 14:32:47',gps:12,geschat:13,totaal:25,betrouwbaarheid:72.1,lat:51.5673333333333,lon:5.67},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Hapert',eerste:'2019-08-21 14:07:48',laatste:'2019-08-21 14:08:12',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:51.326,lon:5.266},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Helmond',eerste:'2021-05-02 13:33:30',laatste:'2021-11-16 09:00:10',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.464,lon:5.6895},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Hilvarenbeek',eerste:'2019-10-28 13:12:34',laatste:'2019-10-28 14:48:14',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:51.5182857142857,lon:5.107},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Hoogeloon',eerste:'2020-10-26 14:36:00',laatste:'2020-10-26 14:36:00',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.406,lon:5.269},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Leende',eerste:'2023-08-23 11:11:16',laatste:'2023-08-23 11:32:34',gps:1,geschat:1,totaal:2,betrouwbaarheid:37.0,lat:51.317,lon:5.499},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Liempde',eerste:'2020-04-27 13:10:49',laatste:'2024-03-06 15:20:39',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:51.555,lon:5.37933333333333},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Mierlo',eerste:'2018-06-27 11:36:17',laatste:'2018-06-27 14:12:36',gps:19,geschat:0,totaal:19,betrouwbaarheid:100.0,lat:51.455,lon:5.58410526315789},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Nuenen',eerste:'2015-11-03 13:43:00',laatste:'2025-06-04 20:29:58',gps:42,geschat:11,totaal:53,betrouwbaarheid:77.3,lat:51.4712619047619,lon:5.54240476190476},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Oirschot',eerste:'2014-01-31 14:35:36',laatste:'2026-06-27 13:43:49',gps:125,geschat:15,totaal:140,betrouwbaarheid:33.7,lat:51.5104959999999,lon:5.314912},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Oisterwijk',eerste:'2018-05-08 10:50:01',laatste:'2023-08-05 13:30:05',gps:7,geschat:1,totaal:8,betrouwbaarheid:29.0,lat:51.5551428571428,lon:5.23114285714286},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Oost West en Middelbeers',eerste:'2018-10-18 12:50:19',laatste:'2025-12-28 11:22:37',gps:3,geschat:1,totaal:4,betrouwbaarheid:100.0,lat:51.4656666666667,lon:5.27533333333333},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Schijndel',eerste:'2015-04-18 13:49:46',laatste:'2015-04-18 13:49:46',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.625,lon:5.439},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Sint-Oedenrode',eerste:'2014-10-26 14:14:43',laatste:'2025-03-10 14:12:41',gps:31,geschat:4,totaal:35,betrouwbaarheid:39.0,lat:51.5581935483871,lon:5.45509677419355},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Son en Breugel',eerste:'2013-12-05 18:38:07',laatste:'2026-02-18 13:53:01',gps:215,geschat:138,totaal:353,betrouwbaarheid:29.1,lat:51.5158558139535,lon:5.50719534883723},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Teteringen',eerste:'2014-05-17 14:45:51',laatste:'2014-05-17 14:45:51',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.617,lon:4.827},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Tilburg',eerste:'2024-08-30 18:57:45',laatste:'2024-08-30 19:24:21',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:51.555,lon:5.083},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Uden',eerste:'2017-12-06 15:35:59',laatste:'2017-12-06 15:37:09',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:51.672,lon:5.581},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Ulvenhout',eerste:'2016-09-13 13:08:07',laatste:'2016-09-13 13:08:07',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.536,lon:4.782},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Valkenswaard',eerste:'2024-08-20 13:20:11',laatste:'2024-08-20 13:25:09',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:51.323,lon:5.452},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Veldhoven',eerste:'2014-08-21 13:08:10',laatste:'2021-03-31 13:07:58',gps:62,geschat:10,totaal:72,betrouwbaarheid:64.6,lat:51.4232580645161,lon:5.36170967741935},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Vught',eerste:'2016-04-20 14:36:48',laatste:'2023-04-26 13:56:44',gps:7,geschat:7,totaal:14,betrouwbaarheid:34.9,lat:51.6655714285714,lon:5.26514285714286},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Werkendam',eerste:'2014-05-21 12:54:42',laatste:'2014-05-21 15:48:32',gps:23,geschat:2,totaal:25,betrouwbaarheid:72.5,lat:51.7649130434783,lon:4.76913043478261},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Wintelre',eerste:'2016-06-18 18:24:00',laatste:'2025-11-08 13:56:47',gps:43,geschat:2,totaal:45,betrouwbaarheid:23.0,lat:51.4593255813953,lon:5.33911627906977},
+{land:'Nederland',provincie:'Noord-Brabant',plaats:'Woudrichem',eerste:'2015-09-30 16:08:09',laatste:'2015-09-30 17:27:56',gps:2,geschat:3,totaal:5,betrouwbaarheid:37.0,lat:51.818,lon:5.002},
+{land:'Nederland',provincie:'Noord-Holland',plaats:'Haarlemmermeer',eerste:'2015-10-06 10:39:48',laatste:'2018-05-15 06:50:43',gps:8,geschat:1,totaal:9,betrouwbaarheid:29.0,lat:52.311375,lon:4.76025},
+{land:'Nederland',provincie:'Noord-Holland',plaats:'Hoofddorp',eerste:'2015-05-17 20:30:34',laatste:'2015-05-17 20:30:34',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.26,lon:4.689},
+{land:'Nederland',provincie:'Noord-Holland',plaats:'Marken',eerste:'2015-10-06 13:33:12',laatste:'2015-10-06 14:59:04',gps:6,geschat:1,totaal:7,betrouwbaarheid:23.0,lat:52.4571666666667,lon:5.10316666666667},
+{land:'Nederland',provincie:'Noord-Holland',plaats:'Uithoorn',eerste:'2015-05-17 19:07:12',laatste:'2015-05-17 19:07:12',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.236,lon:4.796},
+{land:'Nederland',provincie:'Noord-Holland',plaats:'Zuiderwoude',eerste:'2015-10-06 12:23:53',laatste:'2015-10-06 13:05:07',gps:3,geschat:2,totaal:5,betrouwbaarheid:37.0,lat:52.445,lon:5.05},
+{land:'Nederland',provincie:'Overijssel',plaats:'Blokzijl',eerste:'2018-07-13 13:43:10',laatste:'2018-07-13 14:37:55',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:52.7269,lon:5.9604},
+{land:'Nederland',provincie:'Overijssel',plaats:'Deventer',eerste:'2016-12-18 12:09:02',laatste:'2023-03-17 13:11:19',gps:127,geschat:24,totaal:151,betrouwbaarheid:43.1,lat:52.2523858267717,lon:6.16217322834645},
+{land:'Nederland',provincie:'Overijssel',plaats:'Giethoorn',eerste:'2018-07-12 12:50:21',laatste:'2018-07-12 15:41:54',gps:15,geschat:3,totaal:18,betrouwbaarheid:100.0,lat:52.7172666666667,lon:6.06133333333333},
+{land:'Nederland',provincie:'Overijssel',plaats:'Ossenzijl',eerste:'2018-07-13 12:11:40',laatste:'2018-07-13 12:45:30',gps:16,geschat:0,totaal:16,betrouwbaarheid:100.0,lat:52.7988125,lon:5.92875},
+{land:'Nederland',provincie:'Overijssel',plaats:'Steenwijk',eerste:'2018-07-12 19:16:48',laatste:'2018-07-12 19:16:48',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.787,lon:6.117},
+{land:'Nederland',provincie:'Overijssel',plaats:'Wanneperveen',eerste:'2018-07-12 12:14:55',laatste:'2018-07-12 12:35:36',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:52.7093333333333,lon:6.11466666666667},
+{land:'Nederland',provincie:'Overijssel',plaats:'Wetering',eerste:'2018-07-13 15:04:26',laatste:'2018-07-13 15:04:26',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:52.755,lon:5.984},
+{land:'Nederland',provincie:'Overijssel',plaats:'Zuidveen',eerste:'2018-07-12 11:31:37',laatste:'2018-07-12 11:31:57',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:52.762,lon:6.123},
+{land:'Nederland',provincie:'Utrecht',plaats:'Mijdrecht',eerste:'2015-05-17 19:01:29',laatste:'2015-05-17 19:01:59',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:52.203,lon:4.838},
+{land:'Nederland',provincie:'Utrecht',plaats:'Rhenen',eerste:'2014-05-02 10:26:20',laatste:'2014-05-02 14:55:23',gps:38,geschat:22,totaal:60,betrouwbaarheid:91.4,lat:51.9580789473685,lon:5.59042105263158},
+{land:'Nederland',provincie:'Utrecht',plaats:'Utrecht',eerste:'2017-12-08 16:42:34',laatste:'2017-12-08 16:56:24',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:52.088,lon:5.131},
+{land:'Nederland',provincie:'Zeeland',plaats:'Bruinisse',eerste:'2020-09-25 16:09:36',laatste:'2020-09-30 15:00:24',gps:37,geschat:10,totaal:47,betrouwbaarheid:95.8,lat:51.6664324324324,lon:4.07916216216216},
+{land:'Nederland',provincie:'Zeeland',plaats:'Burgh-Haamstede',eerste:'2017-05-18 13:54:50',laatste:'2022-03-24 14:51:11',gps:35,geschat:8,totaal:43,betrouwbaarheid:71.5,lat:51.6852571428571,lon:3.72117142857143},
+{land:'Nederland',provincie:'Zeeland',plaats:'Colijnsplaat',eerste:'2021-06-12 14:37:43',laatste:'2021-06-12 14:49:59',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:51.6047142857143,lon:3.835},
+{land:'Nederland',provincie:'Zeeland',plaats:'Kamperland',eerste:'2019-05-03 16:46:30',laatste:'2022-03-21 18:15:32',gps:214,geschat:26,totaal:240,betrouwbaarheid:80.7,lat:51.5914158878504,lon:3.68939252336449},
+{land:'Nederland',provincie:'Zeeland',plaats:'Middelburg',eerste:'2021-06-08 12:57:17',laatste:'2022-03-23 15:22:23',gps:15,geschat:0,totaal:15,betrouwbaarheid:100.0,lat:51.4988666666667,lon:3.61566666666667},
+{land:'Nederland',provincie:'Zeeland',plaats:'Ouwerkerk',eerste:'2020-10-01 12:25:37',laatste:'2020-10-01 14:23:12',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:51.617,lon:3.982},
+{land:'Nederland',provincie:'Zeeland',plaats:'Renesse',eerste:'2021-06-09 13:42:13',laatste:'2021-06-09 13:42:13',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.732,lon:3.774},
+{land:'Nederland',provincie:'Zeeland',plaats:'Scharendijke',eerste:'2017-05-18 11:50:49',laatste:'2017-05-19 10:25:19',gps:6,geschat:3,totaal:9,betrouwbaarheid:25.0,lat:51.7448333333333,lon:3.82716666666667},
+{land:'Nederland',provincie:'Zeeland',plaats:'Sirjansland',eerste:'2017-05-16 15:43:28',laatste:'2017-05-16 15:43:28',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.671,lon:4.038},
+{land:'Nederland',provincie:'Zeeland',plaats:'Veere',eerste:'2021-06-10 14:33:31',laatste:'2021-06-10 15:05:49',gps:16,geschat:0,totaal:16,betrouwbaarheid:100.0,lat:51.549,lon:3.668375},
+{land:'Nederland',provincie:'Zeeland',plaats:'Vlissingen',eerste:'2021-06-08 12:02:02',laatste:'2022-03-22 14:49:01',gps:15,geschat:1,totaal:16,betrouwbaarheid:23.0,lat:51.4416,lon:3.5752},
+{land:'Nederland',provincie:'Zeeland',plaats:'Vrouwenpolder',eerste:'2021-06-07 17:36:09',laatste:'2022-03-21 17:46:11',gps:28,geschat:2,totaal:30,betrouwbaarheid:50.0,lat:51.6022857142857,lon:3.66982142857143},
+{land:'Nederland',provincie:'Zeeland',plaats:'Westkapelle',eerste:'2021-06-08 11:25:49',laatste:'2022-03-25 12:43:14',gps:7,geschat:1,totaal:8,betrouwbaarheid:42.0,lat:51.5261428571429,lon:3.45942857142857},
+{land:'Nederland',provincie:'Zeeland',plaats:'Zierikzee',eerste:'2017-05-17 11:54:56',laatste:'2020-10-02 11:49:24',gps:15,geschat:3,totaal:18,betrouwbaarheid:23.0,lat:51.6514666666667,lon:3.92},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Arkel',eerste:'2015-04-21 15:23:40',laatste:'2015-04-21 16:16:47',gps:2,geschat:1,totaal:3,betrouwbaarheid:29.0,lat:51.858,lon:5.006},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Den Haag',eerste:'2015-04-27 16:57:21',laatste:'2022-05-04 13:39:53',gps:113,geschat:39,totaal:152,betrouwbaarheid:54.7,lat:52.0789557522124,lon:4.24238053097345},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Herkingen',eerste:'2017-05-16 15:43:37',laatste:'2017-05-16 15:43:37',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:51.728,lon:4.06},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Hoek van Holland',eerste:'2014-01-03 15:12:09',laatste:'2020-11-18 15:21:34',gps:46,geschat:7,totaal:53,betrouwbaarheid:72.3,lat:51.9788043478261,lon:4.11765217391304},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Monster',eerste:'2015-09-16 13:28:25',laatste:'2015-09-16 13:46:29',gps:2,geschat:7,totaal:9,betrouwbaarheid:49.4,lat:52.0525,lon:4.195},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Ouddorp',eerste:'2017-05-16 19:43:20',laatste:'2022-08-26 16:14:49',gps:71,geschat:14,totaal:85,betrouwbaarheid:79.0,lat:51.7730704225353,lon:3.87028169014085},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Oudenhoorn',eerste:'2017-06-28 07:33:23',laatste:'2017-06-28 07:34:00',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:51.829,lon:4.182},
+{land:'Nederland',provincie:'Zuid-Holland',plaats:'Sommelsdijk',eerste:'2014-03-09 12:31:15',laatste:'2019-08-30 19:05:18',gps:9,geschat:5,totaal:14,betrouwbaarheid:41.8,lat:51.7558888888889,lon:4.15388888888889},
+{land:'Portugal',provincie:'Beja',plaats:'Almodôvar',eerste:'2014-03-29 15:08:54',laatste:'2014-03-29 16:26:44',gps:1,geschat:30,totaal:31,betrouwbaarheid:29.2,lat:37.489,lon:-8.079},
+{land:'Portugal',provincie:'Beja',plaats:'Ourique',eerste:'2014-03-29 13:36:54',laatste:'2014-03-29 14:58:47',gps:10,geschat:5,totaal:15,betrouwbaarheid:77.2,lat:37.6547,lon:-8.2261},
+{land:'Portugal',provincie:'Faro',plaats:'Albufeira',eerste:'2014-03-29 19:01:00',laatste:'2014-03-30 18:31:03',gps:10,geschat:19,totaal:29,betrouwbaarheid:83.3,lat:37.0891,lon:-8.2233},
+{land:'Portugal',provincie:'Faro',plaats:'Armação de Pêra',eerste:'2014-03-31 11:43:02',laatste:'2014-03-31 13:12:59',gps:3,geschat:8,totaal:11,betrouwbaarheid:35.8,lat:37.1,lon:-8.35666666666667},
+{land:'Portugal',provincie:'Faro',plaats:'Estômbar e Parchal',eerste:'2014-03-31 15:37:25',laatste:'2014-04-02 20:40:46',gps:7,geschat:2,totaal:9,betrouwbaarheid:37.0,lat:37.1167142857143,lon:-8.49385714285714},
+{land:'Portugal',provincie:'Faro',plaats:'Faro',eerste:'2014-04-07 12:44:18',laatste:'2014-04-07 12:45:40',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:37.021,lon:-7.97},
+{land:'Portugal',provincie:'Faro',plaats:'Lagos',eerste:'2014-04-03 19:08:58',laatste:'2014-04-05 20:47:50',gps:6,geschat:9,totaal:15,betrouwbaarheid:44.3,lat:37.1326666666667,lon:-8.674},
+{land:'Portugal',provincie:'Faro',plaats:'Loulé',eerste:'2014-04-06 13:01:53',laatste:'2014-04-06 14:17:17',gps:2,geschat:23,totaal:25,betrouwbaarheid:82.2,lat:37.2355,lon:-8.1865},
+{land:'Portugal',provincie:'Faro',plaats:'Sagres',eerste:'2014-04-05 13:12:14',laatste:'2014-04-05 15:50:53',gps:5,geschat:29,totaal:34,betrouwbaarheid:93.9,lat:37.034,lon:-8.979},
+{land:'Portugal',provincie:'Faro',plaats:'São Bartolomeu de Messines',eerste:'2014-03-29 12:30:21',laatste:'2014-03-29 12:54:09',gps:1,geschat:10,totaal:11,betrouwbaarheid:44.9,lat:37.315,lon:-8.322},
+{land:'Portugal',provincie:'Faro',plaats:'Vila do Bispo',eerste:'2014-04-05 14:52:04',laatste:'2014-04-05 15:19:05',gps:3,geschat:8,totaal:11,betrouwbaarheid:62.5,lat:37.107,lon:-8.93766666666667},
+{land:'Portugal',provincie:'',plaats:'',eerste:'2014-04-03 14:57:41',laatste:'2018-05-23 13:45:19',gps:52,geschat:25,totaal:77,betrouwbaarheid:55.3,lat:33.3553269230769,lon:-15.8934423076923},
+{land:'Portugal',provincie:'',plaats:'Calheta',eerste:'2018-05-20 14:34:29',laatste:'2018-05-20 17:09:43',gps:23,geschat:1,totaal:24,betrouwbaarheid:29.0,lat:32.755,lon:-17.2266956521739},
+{land:'Portugal',provincie:'',plaats:'Câmara de Lobos',eerste:'2018-05-22 14:10:46',laatste:'2018-05-22 14:45:10',gps:11,geschat:1,totaal:12,betrouwbaarheid:55.0,lat:32.735,lon:-16.929},
+{land:'Portugal',provincie:'',plaats:'Funchal',eerste:'2018-05-15 11:17:46',laatste:'2018-05-22 14:09:13',gps:82,geschat:13,totaal:95,betrouwbaarheid:89.6,lat:32.660756097561,lon:-16.9069024390244},
+{land:'Portugal',provincie:'',plaats:'Machico',eerste:'2018-05-18 14:45:37',laatste:'2018-05-18 16:35:27',gps:42,geschat:0,totaal:42,betrouwbaarheid:100.0,lat:32.7438571428571,lon:-16.7005},
+{land:'Portugal',provincie:'',plaats:'Ponta do Sol',eerste:'2018-05-19 14:28:27',laatste:'2018-05-19 15:11:53',gps:14,geschat:1,totaal:15,betrouwbaarheid:100.0,lat:32.6802142857143,lon:-17.1040714285714},
+{land:'Portugal',provincie:'',plaats:'Porto Moniz',eerste:'2018-05-17 14:05:52',laatste:'2018-05-23 16:09:23',gps:99,geschat:12,totaal:111,betrouwbaarheid:55.4,lat:32.8597272727272,lon:-17.157},
+{land:'Portugal',provincie:'',plaats:'Ribeira Brava',eerste:'2018-05-19 13:40:05',laatste:'2018-05-19 13:56:54',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:32.7448571428571,lon:-17.0228571428571},
+{land:'Portugal',provincie:'',plaats:'Santa Cruz',eerste:'2018-05-15 11:23:27',laatste:'2018-05-15 11:23:40',gps:1,geschat:2,totaal:3,betrouwbaarheid:55.0,lat:32.689,lon:-16.787},
+{land:'Portugal',provincie:'',plaats:'Santana',eerste:'2018-05-16 14:18:29',laatste:'2018-05-22 14:47:27',gps:30,geschat:1,totaal:31,betrouwbaarheid:100.0,lat:32.7775333333333,lon:-16.9166},
+{land:'Portugal',provincie:'',plaats:'São Vicente',eerste:'2018-05-15 13:11:35',laatste:'2018-05-24 08:23:49',gps:90,geschat:38,totaal:128,betrouwbaarheid:51.6,lat:32.8245555555556,lon:-16.9911},
+{land:'Spanje',provincie:'Andalusië',plaats:'Aldeire',eerste:'2025-09-19 12:14:12',laatste:'2025-09-19 12:14:12',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.145,lon:-3.047},
+{land:'Spanje',provincie:'Andalusië',plaats:'Almegíjar',eerste:'2025-09-16 14:07:09',laatste:'2025-09-16 14:07:09',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:36.898,lon:-3.31},
+{land:'Spanje',provincie:'Andalusië',plaats:'Antas',eerste:'2025-09-30 10:57:51',laatste:'2025-09-30 10:57:51',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.231,lon:-1.895},
+{land:'Spanje',provincie:'Andalusië',plaats:'Antequera',eerste:'2025-09-16 11:45:46',laatste:'2025-09-16 11:53:26',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:37.1095,lon:-4.54175},
+{land:'Spanje',provincie:'Andalusië',plaats:'Archidona',eerste:'2025-09-16 11:58:20',laatste:'2025-09-16 11:58:51',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:37.0843333333333,lon:-4.439},
+{land:'Spanje',provincie:'Andalusië',plaats:'Bubión',eerste:'2025-09-18 11:44:44',laatste:'2025-09-25 14:55:46',gps:7,geschat:6,totaal:13,betrouwbaarheid:37.0,lat:36.9561428571429,lon:-3.34628571428571},
+{land:'Spanje',provincie:'Andalusië',plaats:'Bérchules',eerste:'2025-09-30 08:18:55',laatste:'2025-09-30 08:23:14',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:36.9633333333333,lon:-3.1995},
+{land:'Spanje',provincie:'Andalusië',plaats:'Capileira',eerste:'2025-09-18 12:36:48',laatste:'2025-09-18 14:18:46',gps:19,geschat:2,totaal:21,betrouwbaarheid:92.0,lat:36.961,lon:-3.35894736842105},
+{land:'Spanje',provincie:'Andalusië',plaats:'Carataunas',eerste:'2025-09-22 15:27:15',laatste:'2025-09-22 15:27:15',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:36.924,lon:-3.396},
+{land:'Spanje',provincie:'Andalusië',plaats:'Cádiar',eerste:'2025-09-19 09:31:23',laatste:'2025-09-30 08:43:26',gps:21,geschat:3,totaal:24,betrouwbaarheid:27.0,lat:36.961,lon:-3.177},
+{land:'Spanje',provincie:'Andalusië',plaats:'Cástaras',eerste:'2025-09-30 08:03:42',laatste:'2025-09-30 08:07:20',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:36.9464,lon:-3.2582},
+{land:'Spanje',provincie:'Andalusië',plaats:'Córdoba',eerste:'2025-09-14 16:06:09',laatste:'2025-09-15 21:24:08',gps:89,geschat:3,totaal:92,betrouwbaarheid:67.7,lat:37.8794831460674,lon:-4.78121348314607},
+{land:'Spanje',provincie:'Andalusië',plaats:'Encinas Reales',eerste:'2025-09-16 11:34:02',laatste:'2025-09-16 11:34:02',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.297,lon:-4.474},
+{land:'Spanje',provincie:'Andalusië',plaats:'Ferreira',eerste:'2025-09-19 12:02:48',laatste:'2025-09-19 12:23:16',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:37.1339090909091,lon:-3.04018181818182},
+{land:'Spanje',provincie:'Andalusië',plaats:'Granada',eerste:'2025-09-24 10:56:08',laatste:'2025-09-24 17:49:06',gps:70,geschat:47,totaal:117,betrouwbaarheid:87.0,lat:37.1773571428571,lon:-3.58955714285714},
+{land:'Spanje',provincie:'Andalusië',plaats:'Guadix',eerste:'2025-09-19 13:01:07',laatste:'2025-09-19 14:58:20',gps:15,geschat:0,totaal:15,betrouwbaarheid:100.0,lat:37.2939333333333,lon:-3.12266666666667},
+{land:'Spanje',provincie:'Andalusië',plaats:'Huércal-Overa',eerste:'2025-09-30 11:05:25',laatste:'2025-09-30 11:08:25',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:37.3515,lon:-1.964},
+{land:'Spanje',provincie:'Andalusië',plaats:'Instinción',eerste:'2025-09-30 09:43:32',laatste:'2025-09-30 09:44:36',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:36.996,lon:-2.668},
+{land:'Spanje',provincie:'Andalusië',plaats:'Juviles',eerste:'2025-09-30 08:10:23',laatste:'2025-09-30 08:17:18',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:36.951,lon:-3.2245},
+{land:'Spanje',provincie:'Andalusië',plaats:'La Calahorra',eerste:'2025-09-19 12:42:16',laatste:'2025-09-19 12:42:24',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:37.179,lon:-3.058},
+{land:'Spanje',provincie:'Andalusië',plaats:'La Carolina',eerste:'2025-09-14 15:02:38',laatste:'2025-09-14 15:02:49',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:38.247,lon:-3.6285},
+{land:'Spanje',provincie:'Andalusië',plaats:'Las Gabias',eerste:'2025-09-16 12:59:08',laatste:'2025-09-16 12:59:08',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.111,lon:-3.679},
+{land:'Spanje',provincie:'Andalusië',plaats:'Lecrín',eerste:'2025-09-16 13:14:52',laatste:'2025-09-16 13:15:17',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:36.9313333333333,lon:-3.53666666666667},
+{land:'Spanje',provincie:'Andalusië',plaats:'Loja',eerste:'2025-09-16 12:12:36',laatste:'2025-09-16 12:12:36',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.159,lon:-4.212},
+{land:'Spanje',provincie:'Andalusië',plaats:'Los Gallardos',eerste:'2025-09-30 10:49:08',laatste:'2025-09-30 10:49:08',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:37.134,lon:-2.007},
+{land:'Spanje',provincie:'Andalusië',plaats:'Lucena',eerste:'2025-09-16 11:25:35',laatste:'2025-09-16 11:31:40',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:37.37375,lon:-4.5075},
+{land:'Spanje',provincie:'Andalusië',plaats:'Nevada',eerste:'2025-09-19 11:19:53',laatste:'2025-09-19 11:19:59',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:36.988,lon:-3.01},
+{land:'Spanje',provincie:'Andalusië',plaats:'Níjar',eerste:'2025-09-30 10:26:29',laatste:'2025-09-30 10:32:18',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:36.93225,lon:-2.17875},
+{land:'Spanje',provincie:'Andalusië',plaats:'Pampaneira',eerste:'2025-09-25 15:19:06',laatste:'2025-09-25 17:10:48',gps:24,geschat:0,totaal:24,betrouwbaarheid:100.0,lat:36.9405,lon:-3.36104166666667},
+{land:'Spanje',provincie:'Andalusië',plaats:'Purullena',eerste:'2025-09-19 14:47:15',laatste:'2025-09-19 14:48:35',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:37.3176666666667,lon:-3.18166666666667},
+{land:'Spanje',provincie:'Andalusië',plaats:'Pórtugos',eerste:'2025-09-22 15:56:29',laatste:'2025-09-22 15:57:55',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:36.941,lon:-3.307},
+{land:'Spanje',provincie:'Andalusië',plaats:'Soportújar',eerste:'2025-09-22 12:59:12',laatste:'2025-09-22 15:17:33',gps:37,geschat:0,totaal:37,betrouwbaarheid:100.0,lat:36.9282162162162,lon:-3.40505405405406},
+{land:'Spanje',provincie:'Andalusië',plaats:'Sorbas',eerste:'2025-09-30 10:38:57',laatste:'2025-09-30 10:42:04',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:37.0347142857143,lon:-2.04328571428571},
+{land:'Spanje',provincie:'Andalusië',plaats:'Trevélez',eerste:'2025-09-16 15:07:33',laatste:'2025-09-30 07:28:37',gps:134,geschat:21,totaal:155,betrouwbaarheid:83.5,lat:36.9968880597015,lon:-3.26811194029851},
+{land:'Spanje',provincie:'Aragón',plaats:'Abanto',eerste:'2026-05-21 13:55:50',laatste:'2026-05-21 13:58:19',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:41.117,lon:-1.675},
+{land:'Spanje',provincie:'Aragón',plaats:'Alhama de Aragón',eerste:'2026-05-20 13:23:16',laatste:'2026-05-20 14:13:48',gps:12,geschat:0,totaal:12,betrouwbaarheid:100.0,lat:41.2951666666667,lon:-1.89508333333333},
+{land:'Spanje',provincie:'Aragón',plaats:'Alquézar',eerste:'2021-09-21 12:44:03',laatste:'2025-05-21 14:00:23',gps:79,geschat:25,totaal:104,betrouwbaarheid:97.8,lat:42.171746835443,lon:0.0252151898734177},
+{land:'Spanje',provincie:'Aragón',plaats:'Benasque',eerste:'2025-05-12 13:49:57',laatste:'2025-05-12 14:45:12',gps:20,geschat:0,totaal:20,betrouwbaarheid:100.0,lat:42.6786,lon:0.6292},
+{land:'Spanje',provincie:'Aragón',plaats:'Biescas',eerste:'2024-09-29 10:58:57',laatste:'2024-09-29 11:00:06',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:42.593,lon:-0.327},
+{land:'Spanje',provincie:'Aragón',plaats:'Broto',eerste:'2025-05-14 13:20:48',laatste:'2025-05-20 15:37:28',gps:22,geschat:2,totaal:24,betrouwbaarheid:50.0,lat:42.6007727272727,lon:-0.123363636363636},
+{land:'Spanje',provincie:'Aragón',plaats:'Calmarza',eerste:'2026-05-17 11:18:30',laatste:'2026-05-17 13:29:24',gps:35,geschat:0,totaal:35,betrouwbaarheid:100.0,lat:41.1589428571428,lon:-1.91254285714286},
+{land:'Spanje',provincie:'Aragón',plaats:'Campo',eerste:'2025-05-12 12:55:31',laatste:'2025-05-12 13:02:03',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:42.4086666666667,lon:0.395},
+{land:'Spanje',provincie:'Aragón',plaats:'Cantavieja',eerste:'2024-05-14 14:19:27',laatste:'2024-05-14 14:48:08',gps:4,geschat:1,totaal:5,betrouwbaarheid:100.0,lat:40.527,lon:-0.4055},
+{land:'Spanje',provincie:'Aragón',plaats:'Carenas',eerste:'2026-05-17 13:55:43',laatste:'2026-05-22 15:07:50',gps:19,geschat:1,totaal:20,betrouwbaarheid:42.0,lat:41.2548947368421,lon:-1.80705263157895},
+{land:'Spanje',provincie:'Aragón',plaats:'Castejón de Sos',eerste:'2025-05-12 13:19:42',laatste:'2025-05-12 15:19:31',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:42.4904,lon:0.4626},
+{land:'Spanje',provincie:'Aragón',plaats:'Cubel',eerste:'2026-05-21 14:11:10',laatste:'2026-05-21 17:43:32',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:41.0875,lon:-1.625},
+{land:'Spanje',provincie:'Aragón',plaats:'Daroca',eerste:'2026-05-16 15:32:22',laatste:'2026-05-21 17:06:25',gps:24,geschat:4,totaal:28,betrouwbaarheid:47.5,lat:41.1134583333333,lon:-1.41125},
+{land:'Spanje',provincie:'Aragón',plaats:'Ejulve',eerste:'2026-05-16 13:45:33',laatste:'2026-05-16 13:47:24',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:40.731,lon:-0.534},
+{land:'Spanje',provincie:'Aragón',plaats:'El Grado - Lo Grau',eerste:'2021-09-06 11:55:19',laatste:'2022-11-23 19:59:46',gps:10,geschat:1,totaal:11,betrouwbaarheid:45.0,lat:42.1782,lon:0.223},
+{land:'Spanje',provincie:'Aragón',plaats:'Estada',eerste:'2021-09-08 10:43:12',laatste:'2021-09-17 15:14:22',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:42.098,lon:0.252666666666667},
+{land:'Spanje',provincie:'Aragón',plaats:'Fiscal',eerste:'2025-05-20 16:13:44',laatste:'2025-05-20 16:15:15',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.46725,lon:0.0065},
+{land:'Spanje',provincie:'Aragón',plaats:'Graus',eerste:'2021-09-05 10:58:40',laatste:'2025-05-23 12:13:31',gps:96,geschat:10,totaal:106,betrouwbaarheid:70.3,lat:42.1582083333333,lon:0.339010416666667},
+{land:'Spanje',provincie:'Aragón',plaats:'Huesca/Uesca',eerste:'2026-05-23 09:54:52',laatste:'2026-05-23 10:06:36',gps:4,geschat:4,totaal:8,betrouwbaarheid:45.0,lat:42.1365,lon:-0.43275},
+{land:'Spanje',provincie:'Aragón',plaats:'Ibdes',eerste:'2026-05-17 13:30:00',laatste:'2026-05-21 12:20:28',gps:18,geschat:1,totaal:19,betrouwbaarheid:55.0,lat:41.2268888888889,lon:-1.82011111111111},
+{land:'Spanje',provincie:'Aragón',plaats:'Igriés',eerste:'2026-05-23 10:08:41',laatste:'2026-05-23 10:08:41',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.203,lon:-0.436},
+{land:'Spanje',provincie:'Aragón',plaats:'Jaca',eerste:'2024-09-29 10:44:29',laatste:'2024-09-29 10:46:30',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.551,lon:-0.4395},
+{land:'Spanje',provincie:'Aragón',plaats:'Jaraba',eerste:'2026-05-21 11:45:03',laatste:'2026-05-21 11:58:22',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:41.1914,lon:-1.8806},
+{land:'Spanje',provincie:'Aragón',plaats:'La Puebla de Castro',eerste:'2021-09-04 17:08:51',laatste:'2025-05-23 21:17:07',gps:118,geschat:56,totaal:174,betrouwbaarheid:54.7,lat:42.1402881355932,lon:0.309686440677966},
+{land:'Spanje',provincie:'Aragón',plaats:'Las Peñas de Riglos',eerste:'2021-09-16 13:01:48',laatste:'2021-09-16 14:46:04',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:42.3478181818182,lon:-0.727},
+{land:'Spanje',provincie:'Aragón',plaats:'Loscorrales/Os Corrals',eerste:'2021-09-16 16:12:03',laatste:'2021-09-16 16:12:03',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.252,lon:-0.624},
+{land:'Spanje',provincie:'Aragón',plaats:'Mirambel',eerste:'2024-05-14 13:42:04',laatste:'2024-05-14 14:06:40',gps:29,geschat:0,totaal:29,betrouwbaarheid:100.0,lat:40.5864827586207,lon:-0.343724137931035},
+{land:'Spanje',provincie:'Aragón',plaats:'Monterde',eerste:'2026-05-21 17:51:59',laatste:'2026-05-21 17:56:37',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:41.178,lon:-1.74166666666667},
+{land:'Spanje',provincie:'Aragón',plaats:'Naval',eerste:'2021-09-06 12:08:46',laatste:'2021-09-06 12:10:39',gps:2,geschat:4,totaal:6,betrouwbaarheid:55.0,lat:42.203,lon:0.212},
+{land:'Spanje',provincie:'Aragón',plaats:'Nombrevilla',eerste:'2026-05-16 15:31:02',laatste:'2026-05-16 15:31:35',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:41.1045,lon:-1.36},
+{land:'Spanje',provincie:'Aragón',plaats:'Nuévalos',eerste:'2026-05-17 14:38:35',laatste:'2026-05-22 20:05:11',gps:81,geschat:73,totaal:154,betrouwbaarheid:81.8,lat:41.1986790123457,lon:-1.78485185185185},
+{land:'Spanje',provincie:'Aragón',plaats:'Olvena',eerste:'2021-09-07 12:29:04',laatste:'2021-09-17 16:22:58',gps:57,geschat:4,totaal:61,betrouwbaarheid:88.8,lat:42.1053333333333,lon:0.260245614035088},
+{land:'Spanje',provincie:'Aragón',plaats:'Panticosa',eerste:'2024-09-29 11:38:23',laatste:'2024-09-29 11:38:42',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.7175,lon:-0.307},
+{land:'Spanje',provincie:'Aragón',plaats:'Ribagorza',eerste:'2021-09-04 15:36:52',laatste:'2025-05-18 12:12:08',gps:117,geschat:8,totaal:125,betrouwbaarheid:65.6,lat:42.2689743589744,lon:0.522649572649573},
+{land:'Spanje',provincie:'Aragón',plaats:'Romanos',eerste:'2026-05-16 15:27:41',laatste:'2026-05-16 15:27:41',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.116,lon:-1.299},
+{land:'Spanje',provincie:'Aragón',plaats:'Sabiñánigo',eerste:'2024-09-29 10:46:55',laatste:'2026-05-23 10:36:53',gps:13,geschat:0,totaal:13,betrouwbaarheid:100.0,lat:42.4849230769231,lon:-0.376384615384615},
+{land:'Spanje',provincie:'Aragón',plaats:'Sallent de Gállego',eerste:'2024-09-29 11:34:22',laatste:'2026-05-23 11:47:21',gps:39,geschat:0,totaal:39,betrouwbaarheid:100.0,lat:42.7523076923077,lon:-0.34225641025641},
+{land:'Spanje',provincie:'Aragón',plaats:'Salvatierra de Esca',eerste:'2024-09-19 12:57:18',laatste:'2024-09-19 13:27:30',gps:14,geschat:5,totaal:19,betrouwbaarheid:60.0,lat:42.6628571428571,lon:-1.01035714285714},
+{land:'Spanje',provincie:'Aragón',plaats:'Santa Cilia',eerste:'2024-09-29 10:27:03',laatste:'2024-09-29 10:27:03',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.565,lon:-0.717},
+{land:'Spanje',provincie:'Aragón',plaats:'Sigüés',eerste:'2024-09-19 13:23:07',laatste:'2024-09-29 10:09:35',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:42.6288571428571,lon:-0.974285714285714},
+{land:'Spanje',provincie:'Aragón',plaats:'Sobrarbe',eerste:'2021-09-06 12:58:55',laatste:'2025-05-14 15:11:47',gps:102,geschat:14,totaal:116,betrouwbaarheid:87.8,lat:42.5075294117647,lon:0.0938137254901959},
+{land:'Spanje',provincie:'Aragón',plaats:'Sopeira',eerste:'2021-09-16 13:00:17',laatste:'2021-09-16 15:18:04',gps:13,geschat:1,totaal:14,betrouwbaarheid:45.0,lat:42.3446923076923,lon:0.729076923076923},
+{land:'Spanje',provincie:'Aragón',plaats:'Tronchón',eerste:'2026-05-16 12:10:50',laatste:'2026-05-16 12:13:09',gps:8,geschat:0,totaal:8,betrouwbaarheid:100.0,lat:40.637125,lon:-0.43225},
+{land:'Spanje',provincie:'Aragón',plaats:'Used',eerste:'2026-05-21 17:35:41',laatste:'2026-05-21 17:35:41',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.056,lon:-1.587},
+{land:'Spanje',provincie:'Aragón',plaats:'Val de San Martín',eerste:'2026-05-21 17:16:43',laatste:'2026-05-21 17:16:43',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.053,lon:-1.461},
+{land:'Spanje',provincie:'Aragón',plaats:'Villarluengo',eerste:'2026-05-16 12:19:26',laatste:'2026-05-16 13:28:41',gps:18,geschat:6,totaal:24,betrouwbaarheid:100.0,lat:40.6616111111111,lon:-0.536333333333333},
+{land:'Spanje',provincie:'Asturië',plaats:'Amieva',eerste:'2014-09-11 12:52:11',laatste:'2014-09-11 12:59:29',gps:2,geschat:20,totaal:22,betrouwbaarheid:57.5,lat:43.225,lon:-5.09},
+{land:'Spanje',provincie:'Asturië',plaats:'Cabrales',eerste:'2014-09-09 14:54:48',laatste:'2017-09-24 18:43:35',gps:8,geschat:20,totaal:28,betrouwbaarheid:71.5,lat:43.311875,lon:-4.838625},
+{land:'Spanje',provincie:'Asturië',plaats:'Cangas de Onís',eerste:'2014-09-09 16:50:05',laatste:'2017-09-26 17:33:42',gps:121,geschat:218,totaal:339,betrouwbaarheid:76.2,lat:43.2866363636364,lon:-5.008},
+{land:'Spanje',provincie:'Asturië',plaats:'Caravia',eerste:'2019-09-18 15:04:55',laatste:'2019-09-18 15:18:54',gps:14,geschat:0,totaal:14,betrouwbaarheid:100.0,lat:43.439,lon:-5.193},
+{land:'Spanje',provincie:'Asturië',plaats:'Carreño',eerste:'2018-05-15 08:21:46',laatste:'2018-05-15 08:21:46',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.573,lon:-5.75},
+{land:'Spanje',provincie:'Asturië',plaats:'Llanes',eerste:'2019-09-18 16:27:18',laatste:'2019-09-18 16:33:36',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:43.441,lon:-4.8743},
+{land:'Spanje',provincie:'Asturië',plaats:'Parres',eerste:'2014-09-09 16:19:46',laatste:'2014-09-13 11:30:20',gps:5,geschat:30,totaal:35,betrouwbaarheid:40.5,lat:43.3676,lon:-5.146},
+{land:'Spanje',provincie:'Asturië',plaats:'Peñamellera Alta',eerste:'2014-09-09 14:19:08',laatste:'2014-09-09 14:26:58',gps:4,geschat:11,totaal:15,betrouwbaarheid:91.8,lat:43.30975,lon:-4.733},
+{land:'Spanje',provincie:'Asturië',plaats:'Peñamellera Baja',eerste:'2014-09-09 14:01:42',laatste:'2019-09-19 13:05:39',gps:17,geschat:31,totaal:48,betrouwbaarheid:87.6,lat:43.2912352941176,lon:-4.62394117647059},
+{land:'Spanje',provincie:'Asturië',plaats:'Ponga',eerste:'2014-09-11 13:06:22',laatste:'2017-09-24 17:38:07',gps:22,geschat:56,totaal:78,betrouwbaarheid:72.6,lat:43.2085454545455,lon:-5.09013636363636},
+{land:'Spanje',provincie:'Asturië',plaats:'Ribadedeva',eerste:'2019-09-20 12:34:06',laatste:'2019-09-20 12:34:06',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:43.374,lon:-4.521},
+{land:'Spanje',provincie:'Asturië',plaats:'Ribadesella/Ribeseya',eerste:'2019-09-18 15:03:37',laatste:'2019-09-18 15:03:53',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:43.439,lon:-5.192},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Aia',eerste:'2018-09-09 13:15:53',laatste:'2018-09-15 12:34:09',gps:30,geschat:2,totaal:32,betrouwbaarheid:72.5,lat:43.2408,lon:-2.15126666666667},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Aiarako kuadrilla',eerste:'2014-09-20 14:43:42',laatste:'2014-09-20 15:00:51',gps:3,geschat:9,totaal:12,betrouwbaarheid:67.9,lat:42.959,lon:-3.018},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Beizama',eerste:'2018-09-12 16:24:27',laatste:'2018-09-12 16:26:56',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:43.1282,lon:-2.228},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Bilbao',eerste:'2018-09-07 14:05:29',laatste:'2022-09-20 16:43:46',gps:44,geschat:35,totaal:79,betrouwbaarheid:84.7,lat:43.2655681818182,lon:-2.93513636363636},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Deba',eerste:'2018-09-11 13:26:50',laatste:'2018-09-11 14:31:01',gps:11,geschat:3,totaal:14,betrouwbaarheid:79.7,lat:43.2991818181818,lon:-2.34381818181818},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Donostia / San Sebastián',eerste:'2018-09-03 16:47:06',laatste:'2025-05-26 14:07:33',gps:167,geschat:10,totaal:177,betrouwbaarheid:65.6,lat:43.3145688622755,lon:-2.01140718562874},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Ezkio-Itsaso',eerste:'2018-09-12 13:46:56',laatste:'2018-09-12 16:02:33',gps:13,geschat:3,totaal:16,betrouwbaarheid:29.0,lat:43.087,lon:-2.24476923076923},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Getaria',eerste:'2018-09-11 12:37:11',laatste:'2018-09-11 12:38:39',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:43.306,lon:-2.2105},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Hondarribia',eerste:'2017-10-02 14:41:28',laatste:'2018-09-10 16:33:55',gps:41,geschat:7,totaal:48,betrouwbaarheid:58.7,lat:43.3617073170732,lon:-1.80051219512195},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Labastida / Bastida',eerste:'2022-09-10 11:16:53',laatste:'2022-09-10 11:16:53',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.582,lon:-2.819},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Laguardia',eerste:'2025-05-27 15:39:50',laatste:'2025-05-30 15:00:59',gps:52,geschat:6,totaal:58,betrouwbaarheid:75.3,lat:42.554,lon:-2.58503846153846},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Ondarroa',eerste:'2018-09-11 14:42:45',laatste:'2018-09-11 15:50:22',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:43.3199,lon:-2.4221},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Orio',eerste:'2017-09-18 13:48:29',laatste:'2018-09-08 12:50:33',gps:7,geschat:3,totaal:10,betrouwbaarheid:50.0,lat:43.286,lon:-2.11185714285714},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Usurbil',eerste:'2018-09-09 13:13:25',laatste:'2018-09-09 13:13:25',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.292,lon:-2.074},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Zarautz',eerste:'2018-09-11 12:37:29',laatste:'2018-09-11 12:37:29',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.286,lon:-2.162},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Zumaia',eerste:'2018-09-11 16:25:20',laatste:'2018-09-11 17:57:36',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:43.2973,lon:-2.2559},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Alfoz de Lloredo',eerste:'2017-09-29 13:22:59',laatste:'2023-09-22 13:34:18',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:43.38725,lon:-4.2075},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Arnuero',eerste:'2023-09-09 10:45:47',laatste:'2023-09-21 16:20:59',gps:97,geschat:19,totaal:116,betrouwbaarheid:68.3,lat:43.4900824742268,lon:-3.55076288659794},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Cabezón de la Sal',eerste:'2017-09-21 12:48:53',laatste:'2017-09-21 12:48:53',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.309,lon:-4.235},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Camaleño',eerste:'2014-09-12 14:41:04',laatste:'2023-09-24 15:06:43',gps:105,geschat:102,totaal:207,betrouwbaarheid:78.5,lat:43.1400761904762,lon:-4.79720952380952},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Castro-Urdiales',eerste:'2014-09-04 13:21:34',laatste:'2014-09-04 15:28:33',gps:3,geschat:32,totaal:35,betrouwbaarheid:40.4,lat:43.361,lon:-3.18566666666667},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Cillorigo de Liébana',eerste:'2019-09-16 18:24:03',laatste:'2023-09-24 17:50:20',gps:17,geschat:3,totaal:20,betrouwbaarheid:32.3,lat:43.1772941176471,lon:-4.60323529411765},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Comillas',eerste:'2017-09-20 12:50:58',laatste:'2023-09-29 11:34:51',gps:163,geschat:9,totaal:172,betrouwbaarheid:71.9,lat:43.3863803680982,lon:-4.29329447852761},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Hermandad de Campoo de Suso',eerste:'2014-09-05 14:30:10',laatste:'2023-09-25 15:08:34',gps:108,geschat:56,totaal:164,betrouwbaarheid:93.2,lat:43.0352777777778,lon:-4.34377777777778},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Liérganes',eerste:'2014-09-06 14:31:12',laatste:'2014-09-06 14:34:33',gps:4,geschat:5,totaal:9,betrouwbaarheid:71.0,lat:43.378,lon:-3.779},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Medio Cudeyo',eerste:'2014-09-06 14:33:37',laatste:'2014-09-06 15:13:35',gps:11,geschat:17,totaal:28,betrouwbaarheid:94.7,lat:43.379,lon:-3.77890909090909},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Meruelo',eerste:'2023-09-16 15:18:55',laatste:'2023-09-16 15:23:31',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:43.4485,lon:-3.5615},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Noja',eerste:'2014-09-04 17:49:01',laatste:'2023-09-21 13:36:55',gps:188,geschat:117,totaal:305,betrouwbaarheid:90.5,lat:43.4852765957447,lon:-3.52559042553191},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Peñarrubia',eerste:'2014-09-12 13:58:45',laatste:'2019-09-19 13:03:11',gps:7,geschat:15,totaal:22,betrouwbaarheid:84.3,lat:43.278,lon:-4.62142857142857},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Polaciones',eerste:'2014-09-05 15:00:05',laatste:'2023-09-25 13:17:43',gps:20,geschat:3,totaal:23,betrouwbaarheid:55.0,lat:43.04385,lon:-4.3984},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Potes',eerste:'2019-09-16 16:14:38',laatste:'2023-09-24 17:40:22',gps:54,geschat:20,totaal:74,betrouwbaarheid:84.2,lat:43.1536851851852,lon:-4.62372222222222},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Ribamontán al Mar',eerste:'2014-09-06 12:19:41',laatste:'2023-09-22 11:26:30',gps:25,geschat:46,totaal:71,betrouwbaarheid:78.5,lat:43.47512,lon:-3.70472},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Ruente',eerste:'2017-09-21 13:06:20',laatste:'2017-09-21 13:07:23',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:43.259,lon:-4.266},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Ruiloba',eerste:'2017-09-30 12:32:59',laatste:'2019-09-12 11:53:07',gps:5,geschat:2,totaal:7,betrouwbaarheid:29.0,lat:43.388,lon:-4.279},
+{land:'Spanje',provincie:'Cantabrië',plaats:'San Vicente de la Barquera',eerste:'2014-09-09 11:58:33',laatste:'2023-09-29 22:14:08',gps:225,geschat:98,totaal:323,betrouwbaarheid:66.0,lat:43.3867022222224,lon:-4.34451555555555},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Santillana del Mar',eerste:'2017-09-22 13:35:03',laatste:'2023-09-27 13:22:19',gps:74,geschat:3,totaal:77,betrouwbaarheid:100.0,lat:43.3911216216216,lon:-4.107},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Santoña',eerste:'2023-09-14 12:23:52',laatste:'2023-09-19 16:25:19',gps:40,geschat:4,totaal:44,betrouwbaarheid:45.0,lat:43.443775,lon:-3.4565},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Suances',eerste:'2017-09-22 15:50:09',laatste:'2023-09-27 16:34:00',gps:23,geschat:10,totaal:33,betrouwbaarheid:48.3,lat:43.4405217391304,lon:-4.04365217391304},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Valdáliga',eerste:'2017-09-19 12:10:13',laatste:'2023-09-28 20:20:14',gps:117,geschat:14,totaal:131,betrouwbaarheid:83.9,lat:43.3858461538462,lon:-4.32882905982906},
+{land:'Spanje',provincie:'Cantabrië',plaats:'Vega de Liébana',eerste:'2017-09-24 13:10:07',laatste:'2019-09-19 15:12:28',gps:15,geschat:2,totaal:17,betrouwbaarheid:72.5,lat:43.0752,lon:-4.73746666666667},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Berberana',eerste:'2014-09-20 11:18:05',laatste:'2014-09-20 13:58:02',gps:12,geschat:67,totaal:79,betrouwbaarheid:84.6,lat:42.949,lon:-3.00408333333333},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Boca de Huérgano',eerste:'2017-09-24 13:47:35',laatste:'2017-09-24 13:51:44',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:43.056,lon:-4.85325},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Cabrillanes',eerste:'2018-05-15 08:26:39',laatste:'2018-05-15 10:14:15',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.99375,lon:-6.2335},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Cervera de Pisuerga',eerste:'2014-09-08 13:53:37',laatste:'2014-09-08 16:28:50',gps:2,geschat:74,totaal:76,betrouwbaarheid:35.3,lat:42.908,lon:-4.645},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Merindad de Valdivielso',eerste:'2022-09-16 12:04:58',laatste:'2022-09-16 12:10:33',gps:1,geschat:11,totaal:12,betrouwbaarheid:45.0,lat:42.859,lon:-3.591},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Miranda de Ebro',eerste:'2014-09-18 18:38:39',laatste:'2014-09-20 19:13:17',gps:24,geschat:93,totaal:117,betrouwbaarheid:93.6,lat:42.6849583333333,lon:-2.95058333333333},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Oseja de Sajambre',eerste:'2014-09-11 13:49:01',laatste:'2014-09-11 16:57:36',gps:4,geschat:24,totaal:28,betrouwbaarheid:53.0,lat:43.1335,lon:-5.0345},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Posada de Valdeón',eerste:'2014-09-11 14:39:14',laatste:'2017-09-25 10:48:04',gps:55,geschat:69,totaal:124,betrouwbaarheid:91.3,lat:43.1576363636363,lon:-4.90489090909091},
+{land:'Spanje',provincie:'Castilië en León',plaats:'Riaño',eerste:'2014-09-11 16:00:09',laatste:'2014-09-11 16:19:08',gps:3,geschat:23,totaal:26,betrouwbaarheid:52.8,lat:42.969,lon:-4.983},
+{land:'Spanje',provincie:'Castilië-La Mancha',plaats:'Atalaya del Cañavate',eerste:'2025-09-14 12:25:27',laatste:'2025-09-14 12:26:38',gps:2,geschat:1,totaal:3,betrouwbaarheid:55.0,lat:39.5095,lon:-2.2515},
+{land:'Spanje',provincie:'Castilië-La Mancha',plaats:'El Peral',eerste:'2025-09-14 11:51:58',laatste:'2025-09-14 12:06:21',gps:1,geschat:2,totaal:3,betrouwbaarheid:41.0,lat:39.531,lon:-1.858},
+{land:'Spanje',provincie:'Castilië-La Mancha',plaats:'Tébar',eerste:'2025-09-14 12:20:14',laatste:'2025-09-14 12:20:21',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:39.493,lon:-2.14},
+{land:'Spanje',provincie:'Castilië-La Mancha',plaats:'Viso del Marqués',eerste:'2025-09-14 14:50:09',laatste:'2025-09-14 14:50:09',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.407,lon:-3.5},
+{land:'Spanje',provincie:'Catalonië',plaats:'Abella de la Conca',eerste:'2021-09-13 15:25:27',laatste:'2021-09-13 16:00:54',gps:4,geschat:8,totaal:12,betrouwbaarheid:37.0,lat:42.14925,lon:1.117},
+{land:'Spanje',provincie:'Catalonië',plaats:'Abrera',eerste:'2024-05-20 12:32:02',laatste:'2024-05-20 12:34:16',gps:4,geschat:1,totaal:5,betrouwbaarheid:55.0,lat:41.50425,lon:1.90775},
+{land:'Spanje',provincie:'Catalonië',plaats:'Alcanar',eerste:'2023-03-31 17:04:46',laatste:'2024-05-19 14:54:25',gps:30,geschat:7,totaal:37,betrouwbaarheid:82.4,lat:40.5883666666667,lon:0.545666666666667},
+{land:'Spanje',provincie:'Catalonië',plaats:'Amposta',eerste:'2023-06-21 14:14:25',laatste:'2025-10-05 08:17:47',gps:52,geschat:3,totaal:55,betrouwbaarheid:100.0,lat:40.65225,lon:0.72625},
+{land:'Spanje',provincie:'Catalonië',plaats:'Argelaguer',eerste:'2024-09-02 16:13:48',laatste:'2024-09-02 17:08:57',gps:1,geschat:5,totaal:6,betrouwbaarheid:29.0,lat:42.217,lon:2.637},
+{land:'Spanje',provincie:'Catalonië',plaats:'Avinyonet del Penedès',eerste:'2025-10-05 09:26:02',laatste:'2025-10-05 09:26:02',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.381,lon:1.739},
+{land:'Spanje',provincie:'Catalonië',plaats:'Baix Pallars',eerste:'2021-09-13 12:12:26',laatste:'2021-09-13 12:28:19',gps:2,geschat:12,totaal:14,betrouwbaarheid:37.0,lat:42.3325,lon:1.067},
+{land:'Spanje',provincie:'Catalonië',plaats:'Begur',eerste:'2024-05-27 13:55:03',laatste:'2024-05-27 15:23:01',gps:31,geschat:5,totaal:36,betrouwbaarheid:100.0,lat:41.954064516129,lon:3.20658064516129},
+{land:'Spanje',provincie:'Catalonië',plaats:'Besalú',eerste:'2024-09-06 12:13:34',laatste:'2024-09-06 15:24:05',gps:35,geschat:4,totaal:39,betrouwbaarheid:100.0,lat:42.1992571428572,lon:2.70074285714286},
+{land:'Spanje',provincie:'Catalonië',plaats:'Cadaqués',eerste:'2024-05-25 10:56:13',laatste:'2024-05-25 13:39:41',gps:39,geschat:9,totaal:48,betrouwbaarheid:82.9,lat:42.2897179487179,lon:3.27569230769231},
+{land:'Spanje',provincie:'Catalonië',plaats:'Camarles',eerste:'2025-10-05 08:22:38',laatste:'2025-10-05 08:22:38',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:40.78,lon:0.646},
+{land:'Spanje',provincie:'Catalonië',plaats:'Cambrils',eerste:'2023-06-12 14:08:49',laatste:'2023-06-12 14:08:49',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.069,lon:1.006},
+{land:'Spanje',provincie:'Catalonië',plaats:'Camprodon',eerste:'2024-09-07 14:56:56',laatste:'2024-09-07 16:02:57',gps:25,geschat:3,totaal:28,betrouwbaarheid:100.0,lat:42.32096,lon:2.48072},
+{land:'Spanje',provincie:'Catalonië',plaats:'Castellfollit de la Roca',eerste:'2024-09-07 12:32:09',laatste:'2024-09-07 13:34:59',gps:24,geschat:0,totaal:24,betrouwbaarheid:100.0,lat:42.2183333333333,lon:2.554125},
+{land:'Spanje',provincie:'Catalonië',plaats:'Collbató',eerste:'2024-05-20 14:08:34',laatste:'2024-05-20 14:14:54',gps:4,geschat:1,totaal:5,betrouwbaarheid:55.0,lat:41.592,lon:1.83625},
+{land:'Spanje',provincie:'Catalonië',plaats:'Deltebre',eerste:'2023-04-01 11:20:27',laatste:'2025-09-11 15:08:55',gps:53,geschat:6,totaal:59,betrouwbaarheid:44.3,lat:40.7356603773585,lon:0.795490566037736},
+{land:'Spanje',provincie:'Catalonië',plaats:'Esparreguera',eerste:'2024-05-20 12:36:47',laatste:'2024-05-20 12:36:47',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.547,lon:1.852},
+{land:'Spanje',provincie:'Catalonië',plaats:'Gerona',eerste:'2024-05-24 12:24:49',laatste:'2024-05-24 14:20:28',gps:38,geschat:13,totaal:51,betrouwbaarheid:57.7,lat:41.9866052631579,lon:2.82560526315789},
+{land:'Spanje',provincie:'Catalonië',plaats:'Isona i Conca Dellà',eerste:'2021-09-13 16:00:29',laatste:'2021-09-13 16:00:36',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.133,lon:1.0825},
+{land:'Spanje',provincie:'Catalonië',plaats:'Marganell',eerste:'2024-05-20 13:00:53',laatste:'2024-05-20 15:21:25',gps:9,geschat:1,totaal:10,betrouwbaarheid:100.0,lat:41.6108888888889,lon:1.80866666666667},
+{land:'Spanje',provincie:'Catalonië',plaats:'Martorell',eerste:'2024-05-20 12:29:41',laatste:'2024-05-20 12:31:45',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:41.4895,lon:1.9085},
+{land:'Spanje',provincie:'Catalonië',plaats:'Monistrol de Montserrat',eerste:'2024-05-20 13:10:52',laatste:'2024-09-09 11:48:16',gps:28,geschat:9,totaal:37,betrouwbaarheid:98.3,lat:41.59725,lon:1.83792857142857},
+{land:'Spanje',provincie:'Catalonië',plaats:'Mont-roig del Camp',eerste:'2023-06-12 14:08:56',laatste:'2023-06-12 14:11:53',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:41.048,lon:0.967},
+{land:'Spanje',provincie:'Catalonië',plaats:'Montagut i Oix',eerste:'2024-09-07 14:28:06',laatste:'2024-09-07 14:32:59',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:42.2886666666667,lon:2.49566666666667},
+{land:'Spanje',provincie:'Catalonië',plaats:'Olot',eerste:'2024-09-05 10:49:56',laatste:'2024-09-05 11:10:23',gps:13,geschat:0,totaal:13,betrouwbaarheid:100.0,lat:42.1562307692308,lon:2.53923076923077},
+{land:'Spanje',provincie:'Catalonië',plaats:'Pals',eerste:'2024-05-23 14:42:01',laatste:'2024-05-27 15:28:30',gps:42,geschat:6,totaal:48,betrouwbaarheid:100.0,lat:41.9710714285714,lon:3.14492857142857},
+{land:'Spanje',provincie:'Catalonië',plaats:'Regencós',eerste:'2024-05-27 15:26:26',laatste:'2024-05-27 15:26:26',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.952,lon:3.165},
+{land:'Spanje',provincie:'Catalonië',plaats:'Reus',eerste:'2023-03-31 14:55:29',laatste:'2023-03-31 15:09:56',gps:9,geschat:0,totaal:9,betrouwbaarheid:100.0,lat:41.1547777777778,lon:1.10888888888889},
+{land:'Spanje',provincie:'Catalonië',plaats:'Sant Ferriol',eerste:'2024-09-09 09:37:45',laatste:'2024-09-09 09:37:53',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.181,lon:2.619},
+{land:'Spanje',provincie:'Catalonië',plaats:'Sant Jaume d\'Enveja',eerste:'2024-09-12 12:38:02',laatste:'2024-09-12 13:07:47',gps:3,geschat:10,totaal:13,betrouwbaarheid:95.5,lat:40.6916666666667,lon:0.815333333333333},
+{land:'Spanje',provincie:'Catalonië',plaats:'Santa Pau',eerste:'2024-09-02 19:06:42',laatste:'2024-09-09 09:38:05',gps:128,geschat:21,totaal:149,betrouwbaarheid:82.4,lat:42.1493984375,lon:2.55621875},
+{land:'Spanje',provincie:'Catalonië',plaats:'Tarragona',eerste:'2024-09-09 13:09:53',laatste:'2024-09-09 13:26:43',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:41.1453333333333,lon:1.2435},
+{land:'Spanje',provincie:'Catalonië',plaats:'Torroella de Montgrí',eerste:'2024-05-21 12:05:50',laatste:'2024-05-27 19:29:46',gps:46,geschat:14,totaal:60,betrouwbaarheid:54.9,lat:42.0501956521739,lon:3.18132608695652},
+{land:'Spanje',provincie:'Catalonië',plaats:'Tortosa',eerste:'2025-10-03 11:45:04',laatste:'2025-10-03 13:12:36',gps:29,geschat:0,totaal:29,betrouwbaarheid:100.0,lat:40.813,lon:0.521793103448276},
+{land:'Spanje',provincie:'Catalonië',plaats:'Tremp',eerste:'2021-09-13 10:51:31',laatste:'2021-09-13 16:49:22',gps:8,geschat:2,totaal:10,betrouwbaarheid:45.0,lat:42.15275,lon:0.80125},
+{land:'Spanje',provincie:'Catalonië',plaats:'Ulldecona',eerste:'2023-06-23 13:18:04',laatste:'2026-05-08 15:59:06',gps:12,geschat:10,totaal:22,betrouwbaarheid:23.0,lat:40.6085833333333,lon:0.344166666666667},
+{land:'Spanje',provincie:'Catalonië',plaats:'Vielha e Mijaran',eerste:'2025-05-10 14:52:59',laatste:'2025-05-10 14:52:59',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.708,lon:0.796},
+{land:'Spanje',provincie:'Catalonië',plaats:'el Pont de Suert',eerste:'2025-05-22 12:40:02',laatste:'2025-05-22 12:52:30',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:42.4072857142857,lon:0.739},
+{land:'Spanje',provincie:'Catalonië',plaats:'els Hostalets de Pierola',eerste:'2024-05-20 12:40:49',laatste:'2024-05-20 12:50:08',gps:1,geschat:2,totaal:3,betrouwbaarheid:55.0,lat:41.573,lon:1.788},
+{land:'Spanje',provincie:'Catalonië',plaats:'l\'Aldea',eerste:'2025-10-05 08:19:38',laatste:'2025-10-05 08:20:08',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:40.751,lon:0.6},
+{land:'Spanje',provincie:'Catalonië',plaats:'l\'Ametlla de Mar',eerste:'2026-04-26 14:07:00',laatste:'2026-04-26 14:07:00',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:40.854,lon:0.762},
+{land:'Spanje',provincie:'Catalonië',plaats:'la Jonquera',eerste:'2023-06-12 11:40:35',laatste:'2024-05-28 11:09:04',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:42.458,lon:2.86633333333333},
+{land:'Spanje',provincie:'Catalonië',plaats:'la Pobla de Segur',eerste:'2021-09-13 11:54:49',laatste:'2021-09-13 12:05:26',gps:2,geschat:3,totaal:5,betrouwbaarheid:47.3,lat:42.2765,lon:1.026},
+{land:'Spanje',provincie:'Catalonië',plaats:'la Ràpita',eerste:'2023-06-27 08:36:36',laatste:'2024-09-11 20:20:14',gps:11,geschat:35,totaal:46,betrouwbaarheid:40.6,lat:40.6311818181818,lon:0.714909090909091},
+{land:'Spanje',provincie:'Galicië',plaats:'Carnota',eerste:'2014-09-15 15:18:14',laatste:'2014-09-15 15:27:25',gps:2,geschat:13,totaal:15,betrouwbaarheid:82.7,lat:42.867,lon:-9.061},
+{land:'Spanje',provincie:'Galicië',plaats:'Dumbría',eerste:'2014-09-15 15:40:33',laatste:'2014-09-15 15:50:48',gps:7,geschat:25,totaal:32,betrouwbaarheid:96.4,lat:42.917,lon:-9.11557142857143},
+{land:'Spanje',provincie:'Galicië',plaats:'Fisterra',eerste:'2014-09-15 16:41:38',laatste:'2014-09-15 17:04:13',gps:17,geschat:45,totaal:62,betrouwbaarheid:90.4,lat:42.8828235294118,lon:-9.272},
+{land:'Spanje',provincie:'Galicië',plaats:'Mondoñedo',eerste:'2014-09-13 14:35:33',laatste:'2014-09-13 14:36:22',gps:2,geschat:4,totaal:6,betrouwbaarheid:72.5,lat:43.433,lon:-7.362},
+{land:'Spanje',provincie:'Galicië',plaats:'Muros',eerste:'2014-09-15 13:09:51',laatste:'2014-09-15 15:11:52',gps:12,geschat:42,totaal:54,betrouwbaarheid:82.9,lat:42.7775833333333,lon:-9.05833333333333},
+{land:'Spanje',provincie:'Galicië',plaats:'Ribeira',eerste:'2014-09-13 17:17:56',laatste:'2014-09-17 20:59:33',gps:32,geschat:156,totaal:188,betrouwbaarheid:81.3,lat:42.579625,lon:-8.95859375},
+{land:'Spanje',provincie:'Galicië',plaats:'Santiago de Compostela',eerste:'2014-09-16 11:30:41',laatste:'2014-09-16 15:23:28',gps:44,geschat:160,totaal:204,betrouwbaarheid:88.7,lat:42.8806136363636,lon:-8.54488636363636},
+{land:'Spanje',provincie:'La Rioja',plaats:'Anguciana',eerste:'2025-05-27 13:28:05',laatste:'2025-05-27 13:29:04',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:42.575,lon:-2.917},
+{land:'Spanje',provincie:'La Rioja',plaats:'Bañares',eerste:'2022-09-15 12:17:16',laatste:'2025-05-29 16:14:09',gps:14,geschat:0,totaal:14,betrouwbaarheid:100.0,lat:42.4678571428571,lon:-2.91664285714286},
+{land:'Spanje',provincie:'La Rioja',plaats:'Briones',eerste:'2022-09-10 11:48:18',laatste:'2025-05-28 12:39:51',gps:21,geschat:1,totaal:22,betrouwbaarheid:37.0,lat:42.5441428571428,lon:-2.7852380952381},
+{land:'Spanje',provincie:'La Rioja',plaats:'Casalarreina',eerste:'2022-09-19 15:00:52',laatste:'2022-09-19 15:19:31',gps:4,geschat:1,totaal:5,betrouwbaarheid:37.0,lat:42.548,lon:-2.91275},
+{land:'Spanje',provincie:'La Rioja',plaats:'Cihuri',eerste:'2022-09-19 11:45:02',laatste:'2025-05-27 13:35:19',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.5685,lon:-2.91975},
+{land:'Spanje',provincie:'La Rioja',plaats:'Haro',eerste:'2022-09-06 11:42:23',laatste:'2025-05-28 21:34:17',gps:151,geschat:137,totaal:288,betrouwbaarheid:75.9,lat:42.5843973509934,lon:-2.85492715231788},
+{land:'Spanje',provincie:'La Rioja',plaats:'Nájera',eerste:'2022-09-14 12:05:33',laatste:'2022-09-14 16:14:42',gps:8,geschat:69,totaal:77,betrouwbaarheid:81.5,lat:42.4195,lon:-2.734625},
+{land:'Spanje',provincie:'La Rioja',plaats:'Sajazarra',eerste:'2025-05-28 10:27:38',laatste:'2025-05-28 11:11:55',gps:38,geschat:0,totaal:38,betrouwbaarheid:100.0,lat:42.5891578947368,lon:-2.96092105263158},
+{land:'Spanje',provincie:'La Rioja',plaats:'San Torcuato',eerste:'2022-09-15 12:26:31',laatste:'2025-05-29 12:01:13',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:42.48775,lon:-2.8865},
+{land:'Spanje',provincie:'La Rioja',plaats:'San Vicente de la Sonsierra',eerste:'2022-09-10 11:39:48',laatste:'2022-09-15 17:18:10',gps:8,geschat:48,totaal:56,betrouwbaarheid:46.0,lat:42.559125,lon:-2.759125},
+{land:'Spanje',provincie:'La Rioja',plaats:'Santo Domingo de la Calzada',eerste:'2022-09-18 14:21:25',laatste:'2025-05-29 15:42:43',gps:59,geschat:22,totaal:81,betrouwbaarheid:25.2,lat:42.4409152542373,lon:-2.95305084745763},
+{land:'Spanje',provincie:'La Rioja',plaats:'Villalba de Rioja',eerste:'2022-09-07 13:02:34',laatste:'2022-09-07 13:17:07',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.6005,lon:-2.895},
+{land:'Spanje',provincie:'La Rioja',plaats:'Zarratón',eerste:'2022-09-18 18:10:04',laatste:'2025-05-29 11:34:56',gps:10,geschat:1,totaal:11,betrouwbaarheid:23.0,lat:42.5258,lon:-2.8723},
+{land:'Spanje',provincie:'Murcia',plaats:'Abarán',eerste:'2025-09-30 12:45:25',laatste:'2025-09-30 12:45:25',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.239,lon:-1.325},
+{land:'Spanje',provincie:'Murcia',plaats:'Blanca',eerste:'2025-09-30 12:44:34',laatste:'2025-09-30 12:44:34',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.227,lon:-1.313},
+{land:'Spanje',provincie:'Murcia',plaats:'Jumilla',eerste:'2025-09-30 12:50:40',laatste:'2025-09-30 12:55:23',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:38.362,lon:-1.268},
+{land:'Spanje',provincie:'Murcia',plaats:'Lorca',eerste:'2025-09-30 11:27:51',laatste:'2025-09-30 11:31:40',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:37.6595,lon:-1.724},
+{land:'Spanje',provincie:'Navarra',plaats:'Aibar / Oibar',eerste:'2024-09-19 15:02:32',laatste:'2024-09-19 15:03:25',gps:2,geschat:3,totaal:5,betrouwbaarheid:83.3,lat:42.588,lon:-1.37},
+{land:'Spanje',provincie:'Navarra',plaats:'Andia mendia',eerste:'2024-09-24 15:59:58',laatste:'2024-09-24 16:06:13',gps:2,geschat:10,totaal:12,betrouwbaarheid:59.5,lat:42.862,lon:-2.006},
+{land:'Spanje',provincie:'Navarra',plaats:'Arbizu',eerste:'2024-09-24 16:25:55',laatste:'2024-09-24 17:26:11',gps:3,geschat:1,totaal:4,betrouwbaarheid:29.0,lat:42.9086666666667,lon:-2.04033333333333},
+{land:'Spanje',provincie:'Navarra',plaats:'Bardenas Reales',eerste:'2024-09-23 15:21:57',laatste:'2024-09-27 14:08:01',gps:19,geschat:42,totaal:61,betrouwbaarheid:88.4,lat:42.2253684210526,lon:-1.52257894736842},
+{land:'Spanje',provincie:'Navarra',plaats:'Burgui / Burgi',eerste:'2024-09-19 13:39:01',laatste:'2024-09-19 14:12:12',gps:3,geschat:4,totaal:7,betrouwbaarheid:38.0,lat:42.712,lon:-1.012},
+{land:'Spanje',provincie:'Navarra',plaats:'Cadreita',eerste:'2024-09-23 15:21:00',laatste:'2024-09-23 15:21:00',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.257,lon:-1.66},
+{land:'Spanje',provincie:'Navarra',plaats:'Carcastillo',eerste:'2024-09-17 15:10:06',laatste:'2024-09-17 15:50:07',gps:3,geschat:4,totaal:7,betrouwbaarheid:58.5,lat:42.372,lon:-1.46733333333333},
+{land:'Spanje',provincie:'Navarra',plaats:'Cascante',eerste:'2024-09-23 14:52:09',laatste:'2024-09-23 14:53:13',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:42.041,lon:-1.697},
+{land:'Spanje',provincie:'Navarra',plaats:'Cáseda',eerste:'2024-09-17 13:37:35',laatste:'2024-09-17 15:03:03',gps:8,geschat:5,totaal:13,betrouwbaarheid:58.4,lat:42.523,lon:-1.3675},
+{land:'Spanje',provincie:'Navarra',plaats:'Ergoiena',eerste:'2024-09-24 16:17:02',laatste:'2024-09-24 16:18:38',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:42.8711666666667,lon:-2.0335},
+{land:'Spanje',provincie:'Navarra',plaats:'Eslava',eerste:'2024-09-19 15:12:51',laatste:'2024-09-29 09:25:37',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:42.5566666666667,lon:-1.444},
+{land:'Spanje',provincie:'Navarra',plaats:'Estella-Lizarra',eerste:'2024-09-24 13:14:41',laatste:'2024-09-24 14:20:36',gps:4,geschat:8,totaal:12,betrouwbaarheid:61.5,lat:42.67,lon:-2.0265},
+{land:'Spanje',provincie:'Navarra',plaats:'Esteribar',eerste:'2024-09-21 15:06:58',laatste:'2024-09-26 14:32:15',gps:21,geschat:3,totaal:24,betrouwbaarheid:55.3,lat:42.9301428571428,lon:-1.50366666666667},
+{land:'Spanje',provincie:'Navarra',plaats:'Gallipienzo / Galipentzu',eerste:'2024-09-17 12:24:07',laatste:'2024-09-17 12:46:27',gps:12,geschat:10,totaal:22,betrouwbaarheid:100.0,lat:42.5236666666667,lon:-1.41},
+{land:'Spanje',provincie:'Navarra',plaats:'Liédena',eerste:'2024-09-26 12:22:48',laatste:'2024-09-26 12:32:52',gps:7,geschat:4,totaal:11,betrouwbaarheid:77.5,lat:42.625,lon:-1.303},
+{land:'Spanje',provincie:'Navarra',plaats:'Lumbier',eerste:'2024-09-26 11:30:07',laatste:'2024-09-26 12:45:57',gps:13,geschat:19,totaal:32,betrouwbaarheid:90.0,lat:42.6330769230769,lon:-1.303},
+{land:'Spanje',provincie:'Navarra',plaats:'Murchante',eerste:'2024-09-23 12:51:50',laatste:'2024-09-23 14:42:41',gps:12,geschat:4,totaal:16,betrouwbaarheid:45.0,lat:42.03,lon:-1.65575},
+{land:'Spanje',provincie:'Navarra',plaats:'Olite / Erriberri',eerste:'2024-09-28 12:22:26',laatste:'2024-09-28 13:53:42',gps:40,geschat:4,totaal:44,betrouwbaarheid:100.0,lat:42.48175,lon:-1.649475},
+{land:'Spanje',provincie:'Navarra',plaats:'Olóriz / Oloritz',eerste:'2024-09-21 14:20:02',laatste:'2024-09-21 14:20:08',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.6365,lon:-1.6395},
+{land:'Spanje',provincie:'Navarra',plaats:'Romanzado / Erromantzatua',eerste:'2024-09-19 10:59:40',laatste:'2024-09-19 12:12:01',gps:1,geschat:6,totaal:7,betrouwbaarheid:45.5,lat:42.692,lon:-1.185},
+{land:'Spanje',provincie:'Navarra',plaats:'San Martín de Unx',eerste:'2024-09-20 14:16:50',laatste:'2024-09-29 09:15:39',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:42.526,lon:-1.55883333333333},
+{land:'Spanje',provincie:'Navarra',plaats:'Ujué / Uxue',eerste:'2024-09-15 16:24:24',laatste:'2024-09-29 08:59:22',gps:144,geschat:82,totaal:226,betrouwbaarheid:90.5,lat:42.5063680555555,lon:-1.50047222222222},
+{land:'Spanje',provincie:'Navarra',plaats:'Urbasa mendia',eerste:'2024-09-24 15:04:38',laatste:'2024-09-24 15:55:31',gps:3,geschat:18,totaal:21,betrouwbaarheid:83.1,lat:42.861,lon:-2.029},
+{land:'Spanje',provincie:'Valencia',plaats:'Alcalà de Xivert',eerste:'2026-05-13 11:08:55',laatste:'2026-05-14 12:55:14',gps:38,geschat:15,totaal:53,betrouwbaarheid:95.1,lat:40.2568947368421,lon:0.280473684210526},
+{land:'Spanje',provincie:'Valencia',plaats:'Benicarló',eerste:'2023-06-15 10:56:56',laatste:'2025-10-02 16:07:09',gps:36,geschat:0,totaal:36,betrouwbaarheid:100.0,lat:40.4395,lon:0.418555555555556},
+{land:'Spanje',provincie:'Valencia',plaats:'Cervera del Maestre',eerste:'2023-06-20 12:39:56',laatste:'2024-05-18 14:17:26',gps:29,geschat:0,totaal:29,betrouwbaarheid:100.0,lat:40.4551724137931,lon:0.278310344827586},
+{land:'Spanje',provincie:'Valencia',plaats:'Càlig',eerste:'2023-04-02 11:34:41',laatste:'2026-05-15 10:01:10',gps:128,geschat:30,totaal:158,betrouwbaarheid:49.3,lat:40.4561875,lon:0.3550546875},
+{land:'Spanje',provincie:'Valencia',plaats:'Fanzara',eerste:'2026-05-05 11:30:32',laatste:'2026-05-05 13:28:22',gps:18,geschat:2,totaal:20,betrouwbaarheid:23.0,lat:40.0188888888889,lon:-0.315166666666667},
+{land:'Spanje',provincie:'Valencia',plaats:'Jérica',eerste:'2026-04-29 13:02:38',laatste:'2026-04-29 14:37:29',gps:20,geschat:0,totaal:20,betrouwbaarheid:100.0,lat:39.9069,lon:-0.56245},
+{land:'Spanje',provincie:'Valencia',plaats:'Moixent / Mogente',eerste:'2025-09-30 13:33:38',laatste:'2025-09-30 13:33:38',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.865,lon:-0.792},
+{land:'Spanje',provincie:'Valencia',plaats:'Morella',eerste:'2023-06-22 11:23:19',laatste:'2023-06-22 14:50:41',gps:84,geschat:5,totaal:89,betrouwbaarheid:100.0,lat:40.6185238095238,lon:-0.0995952380952381},
+{land:'Spanje',provincie:'Valencia',plaats:'Navajas',eerste:'2026-04-26 17:05:08',laatste:'2026-05-03 11:08:38',gps:59,geschat:43,totaal:102,betrouwbaarheid:83.3,lat:39.8757288135593,lon:-0.504915254237288},
+{land:'Spanje',provincie:'Valencia',plaats:'Onda',eerste:'2025-09-12 13:16:23',laatste:'2025-09-12 15:23:46',gps:24,geschat:14,totaal:38,betrouwbaarheid:92.0,lat:39.9624166666667,lon:-0.260041666666667},
+{land:'Spanje',provincie:'Valencia',plaats:'Peníscola / Peñíscola',eerste:'2023-04-02 12:42:15',laatste:'2026-05-13 16:00:12',gps:52,geschat:27,totaal:79,betrouwbaarheid:83.3,lat:40.3594807692308,lon:0.404461538461538},
+{land:'Spanje',provincie:'Valencia',plaats:'Sagunt / Sagunto',eerste:'2026-05-04 11:26:56',laatste:'2026-05-04 16:03:10',gps:19,geschat:24,totaal:43,betrouwbaarheid:96.1,lat:39.6789473684211,lon:-0.277947368421053},
+{land:'Spanje',provincie:'Valencia',plaats:'Sant Jordi / San Jorge',eerste:'2023-04-03 15:42:20',laatste:'2024-05-07 15:45:29',gps:13,geschat:1,totaal:14,betrouwbaarheid:45.0,lat:40.5578461538461,lon:0.381615384615385},
+{land:'Spanje',provincie:'Valencia',plaats:'Sant Mateu',eerste:'2023-06-19 13:43:21',laatste:'2023-06-19 15:25:04',gps:15,geschat:1,totaal:16,betrouwbaarheid:100.0,lat:40.4648666666667,lon:0.180333333333333},
+{land:'Spanje',provincie:'Valencia',plaats:'Sant Rafel del Riu',eerste:'2024-05-10 13:34:17',laatste:'2024-09-11 14:40:25',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:40.6065,lon:0.347},
+{land:'Spanje',provincie:'Valencia',plaats:'Segorbe',eerste:'2026-05-02 13:34:05',laatste:'2026-05-02 13:34:05',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:39.864,lon:-0.512},
+{land:'Spanje',provincie:'Valencia',plaats:'Silla',eerste:'2025-09-30 14:09:20',laatste:'2025-09-30 14:09:20',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:39.342,lon:-0.429},
+{land:'Spanje',provincie:'Valencia',plaats:'Traiguera',eerste:'2025-10-03 16:02:47',laatste:'2025-10-03 16:21:35',gps:17,geschat:0,totaal:17,betrouwbaarheid:100.0,lat:40.5030588235294,lon:0.300647058823529},
+{land:'Spanje',provincie:'Valencia',plaats:'Valencia',eerste:'2026-04-30 11:26:58',laatste:'2026-04-30 17:35:25',gps:57,geschat:3,totaal:60,betrouwbaarheid:81.7,lat:39.4676315789474,lon:-0.368982456140351},
+{land:'Spanje',provincie:'Valencia',plaats:'Vilafamés',eerste:'2025-09-12 16:12:21',laatste:'2025-09-12 16:49:01',gps:13,geschat:1,totaal:14,betrouwbaarheid:100.0,lat:40.1128461538462,lon:-0.0541538461538462},
+{land:'Spanje',provincie:'Valencia',plaats:'Vinaròs',eerste:'2023-04-03 11:03:46',laatste:'2026-05-11 15:13:35',gps:132,geschat:18,totaal:150,betrouwbaarheid:50.6,lat:40.4869318181819,lon:0.467704545454546},
+{land:'Spanje',provincie:'Valencia',plaats:'la Pobla de Benifassà',eerste:'2023-04-03 14:38:41',laatste:'2024-09-11 12:37:51',gps:63,geschat:9,totaal:72,betrouwbaarheid:72.0,lat:40.6703492063492,lon:0.226222222222222},
+{land:'Spanje',provincie:'Valencia',plaats:'la Vall d\'Uixó',eerste:'2025-09-12 11:25:00',laatste:'2025-09-12 12:16:38',gps:2,geschat:10,totaal:12,betrouwbaarheid:31.4,lat:39.824,lon:-0.253},
+{land:'Spanje',provincie:'',plaats:'',eerste:'2014-09-06 12:54:17',laatste:'2026-05-13 12:53:21',gps:98,geschat:45,totaal:143,betrouwbaarheid:70.4,lat:42.3995204081632,lon:-1.16889795918367},
+{land:'Verenigd Koninkrijk',provincie:'Engeland',plaats:'Cotswold',eerste:'2017-06-12 13:28:10',laatste:'2017-06-15 19:04:49',gps:126,geschat:47,totaal:173,betrouwbaarheid:77.1,lat:51.781619047619,lon:-1.83549206349206},
+{land:'Verenigd Koninkrijk',provincie:'Engeland',plaats:'West Oxfordshire',eerste:'2017-06-15 13:35:56',laatste:'2017-06-15 13:36:05',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:51.806,lon:-1.638},
+{land:'Verenigd Koninkrijk',provincie:'Wales',plaats:'',eerste:'2017-06-16 12:19:19',laatste:'2017-06-16 14:23:14',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:52.011,lon:-4.985},
+{land:'Verenigd Koninkrijk',provincie:'Wales',plaats:'Pembrokeshire',eerste:'2017-06-16 10:35:53',laatste:'2017-06-16 14:22:02',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:51.9108,lon:-4.829},
+{land:'Verenigde Staten',provincie:'Alabama',plaats:'Colbert County',eerste:'2015-06-10 11:59:41',laatste:'2015-06-10 20:31:16',gps:4,geschat:9,totaal:13,betrouwbaarheid:55.4,lat:34.84,lon:-87.94375},
+{land:'Verenigde Staten',provincie:'Connecticut',plaats:'Ledyard',eerste:'2015-05-21 20:54:48',laatste:'2015-05-21 20:59:43',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:41.443,lon:-72.018},
+{land:'Verenigde Staten',provincie:'District of Columbia',plaats:'Washington',eerste:'2015-05-30 22:45:21',laatste:'2015-06-01 21:35:37',gps:60,geschat:68,totaal:128,betrouwbaarheid:79.7,lat:38.89225,lon:-77.0432333333333},
+{land:'Verenigde Staten',provincie:'Georgia',plaats:'Lookout Mountain',eerste:'2015-06-07 15:55:36',laatste:'2015-06-07 23:52:02',gps:33,geschat:0,totaal:33,betrouwbaarheid:100.0,lat:34.9735454545455,lon:-85.3488484848485},
+{land:'Verenigde Staten',provincie:'Georgia',plaats:'Walker County',eerste:'2015-06-07 16:30:46',laatste:'2015-06-07 23:50:12',gps:2,geschat:14,totaal:16,betrouwbaarheid:40.1,lat:34.975,lon:-85.348},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Acadia Parish',eerste:'2015-06-16 12:59:51',laatste:'2015-06-16 12:59:51',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:30.236,lon:-92.427},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Concordia Parish',eerste:'2015-06-14 18:12:06',laatste:'2015-06-14 18:12:06',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:31.563,lon:-91.421},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Jefferson Parish',eerste:'2015-06-14 14:33:09',laatste:'2015-06-14 15:53:30',gps:1,geschat:8,totaal:9,betrouwbaarheid:30.0,lat:29.968,lon:-90.129},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Lake Charles',eerste:'2015-06-16 21:40:55',laatste:'2015-06-16 21:41:35',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:30.237,lon:-93.2275},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'New Orleans',eerste:'2015-06-15 02:31:03',laatste:'2015-06-15 22:18:39',gps:31,geschat:1,totaal:32,betrouwbaarheid:100.0,lat:29.9570967741936,lon:-90.0632258064516},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Saint George',eerste:'2015-06-14 21:21:39',laatste:'2015-06-14 21:21:39',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:30.385,lon:-91.042},
+{land:'Verenigde Staten',provincie:'Louisiana',plaats:'Vidalia',eerste:'2015-06-13 23:49:48',laatste:'2015-06-14 18:59:58',gps:14,geschat:26,totaal:40,betrouwbaarheid:51.0,lat:31.5633571428571,lon:-91.4234285714286},
+{land:'Verenigde Staten',provincie:'Maryland',plaats:'Silver Spring',eerste:'2015-05-30 21:22:28',laatste:'2015-05-30 21:22:28',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:39.013,lon:-77.047},
+{land:'Verenigde Staten',provincie:'Massachusetts',plaats:'Barnstable',eerste:'2015-05-23 17:35:03',laatste:'2015-05-24 01:22:29',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:41.652,lon:-70.2809},
+{land:'Verenigde Staten',provincie:'Massachusetts',plaats:'Boston',eerste:'2015-05-24 15:37:46',laatste:'2015-05-26 01:35:25',gps:87,geschat:45,totaal:132,betrouwbaarheid:81.9,lat:42.3559885057471,lon:-71.0675287356322},
+{land:'Verenigde Staten',provincie:'Massachusetts',plaats:'Chatham',eerste:'2015-05-23 14:06:05',laatste:'2015-05-23 21:20:04',gps:4,geschat:3,totaal:7,betrouwbaarheid:39.7,lat:41.68875,lon:-69.99},
+{land:'Verenigde Staten',provincie:'Massachusetts',plaats:'Dennis',eerste:'2015-05-23 19:11:38',laatste:'2015-05-23 19:11:38',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:41.682,lon:-70.142},
+{land:'Verenigde Staten',provincie:'Massachusetts',plaats:'Plymouth',eerste:'2015-05-24 10:12:20',laatste:'2015-05-24 20:14:48',gps:25,geschat:30,totaal:55,betrouwbaarheid:69.2,lat:41.94088,lon:-70.62568},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Benton County',eerste:'2015-06-10 22:11:32',laatste:'2015-06-10 22:11:32',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:34.946,lon:-89.186},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Claiborne County',eerste:'2015-06-13 10:12:23',laatste:'2015-06-13 18:25:48',gps:4,geschat:6,totaal:10,betrouwbaarheid:35.7,lat:31.95375,lon:-90.9625},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Jackson',eerste:'2015-06-13 01:09:17',laatste:'2015-06-13 01:09:17',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:32.3,lon:-90.193},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Jefferson County',eerste:'2015-06-13 19:00:35',laatste:'2015-06-13 19:15:37',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:31.6963333333333,lon:-91.188},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Madison County',eerste:'2015-06-12 14:31:34',laatste:'2015-06-12 23:27:09',gps:6,geschat:4,totaal:10,betrouwbaarheid:37.0,lat:32.4686666666667,lon:-90.0351666666667},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Natchez',eerste:'2015-06-13 12:23:25',laatste:'2015-06-14 00:00:41',gps:16,geschat:5,totaal:21,betrouwbaarheid:35.8,lat:31.562125,lon:-91.404},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Tishomingo County',eerste:'2015-06-10 21:04:52',laatste:'2015-06-10 21:04:52',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:34.768,lon:-88.118},
+{land:'Verenigde Staten',provincie:'Mississippi',plaats:'Tupelo',eerste:'2015-06-12 19:36:47',laatste:'2015-06-12 19:53:20',gps:9,geschat:0,totaal:9,betrouwbaarheid:100.0,lat:34.2598888888889,lon:-88.6802222222222},
+{land:'Verenigde Staten',provincie:'New Hampshire',plaats:'Hinsdale',eerste:'2015-05-26 11:58:21',laatste:'2015-05-26 19:17:18',gps:11,geschat:4,totaal:15,betrouwbaarheid:70.5,lat:42.7862727272727,lon:-72.484},
+{land:'Verenigde Staten',provincie:'New Jersey',plaats:'Jersey City',eerste:'2015-05-18 20:21:13',laatste:'2015-05-20 22:26:36',gps:13,geschat:0,totaal:13,betrouwbaarheid:100.0,lat:40.6983846153846,lon:-74.0506923076923},
+{land:'Verenigde Staten',provincie:'New York',plaats:'City of Niagara Falls',eerste:'2015-05-27 21:23:19',laatste:'2015-05-28 21:20:06',gps:7,geschat:7,totaal:14,betrouwbaarheid:44.1,lat:43.0942857142857,lon:-79.0521428571429},
+{land:'Verenigde Staten',provincie:'New York',plaats:'New York',eerste:'2015-05-18 21:44:05',laatste:'2015-05-21 10:32:39',gps:113,geschat:34,totaal:147,betrouwbaarheid:86.2,lat:40.7284778761062,lon:-74.0016991150443},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Batavia',eerste:'2015-05-27 20:05:47',laatste:'2015-05-27 20:05:47',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:43.016,lon:-78.276},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Bath',eerste:'2015-05-29 19:06:27',laatste:'2015-05-29 19:29:41',gps:3,geschat:1,totaal:4,betrouwbaarheid:37.0,lat:42.374,lon:-77.367},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Colonie',eerste:'2015-05-27 00:14:25',laatste:'2015-05-27 00:14:25',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.756,lon:-73.772},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Farmington',eerste:'2015-05-27 19:16:25',laatste:'2015-05-27 19:24:17',gps:1,geschat:4,totaal:5,betrouwbaarheid:45.0,lat:42.996,lon:-77.364},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Grand Island',eerste:'2015-05-27 21:18:48',laatste:'2015-05-27 21:19:14',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:43.059,lon:-78.99},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Lindley',eerste:'2015-05-29 19:58:35',laatste:'2015-05-29 20:00:34',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.046,lon:-77.143},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Sheldon',eerste:'2015-05-29 17:32:58',laatste:'2015-05-29 17:34:00',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.77,lon:-78.433},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Tonawanda',eerste:'2015-05-27 14:13:48',laatste:'2015-05-27 14:13:48',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.997,lon:-78.934},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Victor',eerste:'2015-05-27 19:25:56',laatste:'2015-05-27 19:28:35',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:43.0036666666667,lon:-77.428},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Wales',eerste:'2015-05-29 17:29:23',laatste:'2015-05-29 17:31:01',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.7695,lon:-78.488},
+{land:'Verenigde Staten',provincie:'New York',plaats:'Town of Wayland',eerste:'2015-05-29 11:40:44',laatste:'2015-05-29 11:40:52',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.521,lon:-77.546},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Alleghany County',eerste:'2015-06-04 18:37:26',laatste:'2015-06-04 19:25:41',gps:10,geschat:0,totaal:10,betrouwbaarheid:100.0,lat:36.475,lon:-81.0575},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Ashe County',eerste:'2015-06-04 11:39:32',laatste:'2015-06-04 20:30:18',gps:7,geschat:7,totaal:14,betrouwbaarheid:28.1,lat:36.344,lon:-81.3761428571429},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Avery County',eerste:'2015-06-04 22:08:27',laatste:'2015-06-04 22:08:27',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:35.956,lon:-81.96},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Haywood County',eerste:'2015-06-05 18:33:57',laatste:'2015-06-05 19:00:12',gps:2,geschat:10,totaal:12,betrouwbaarheid:46.8,lat:35.377,lon:-83.005},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Henderson County',eerste:'2015-06-05 17:19:28',laatste:'2015-06-05 17:19:53',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:35.451,lon:-82.651},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Jackson County',eerste:'2015-06-05 17:48:47',laatste:'2015-06-05 18:33:03',gps:6,geschat:10,totaal:16,betrouwbaarheid:70.2,lat:35.3645,lon:-82.9941666666667},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'McDowell County',eerste:'2015-06-04 22:16:05',laatste:'2015-06-04 22:21:19',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:35.9038333333333,lon:-81.9686666666667},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Swain County',eerste:'2015-06-05 22:43:44',laatste:'2015-06-07 00:00:55',gps:12,geschat:0,totaal:12,betrouwbaarheid:100.0,lat:35.5680833333333,lon:-83.4855833333333},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Watauga County',eerste:'2015-06-04 21:24:41',laatste:'2015-06-04 21:27:49',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:36.136,lon:-81.643},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Wilkes County',eerste:'2015-06-04 20:43:32',laatste:'2015-06-04 20:43:32',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:36.294,lon:-81.415},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Yancey County',eerste:'2015-06-04 22:45:56',laatste:'2015-06-04 23:09:56',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:35.7456666666667,lon:-82.2253333333333},
+{land:'Verenigde Staten',provincie:'North Carolina',plaats:'Yellowhill Community ᎡᎳᏬᏗ',eerste:'2015-06-05 19:47:16',laatste:'2015-06-05 22:13:11',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:35.4861428571429,lon:-83.3152857142857},
+{land:'Verenigde Staten',provincie:'Pennsylvania',plaats:'East Lampeter Township',eerste:'2015-05-30 00:25:02',laatste:'2015-05-30 02:20:08',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:40.0268,lon:-76.2092},
+{land:'Verenigde Staten',provincie:'Pennsylvania',plaats:'Leacock Township',eerste:'2015-05-30 09:47:32',laatste:'2015-05-30 18:57:27',gps:11,geschat:12,totaal:23,betrouwbaarheid:41.1,lat:40.0333636363636,lon:-76.1339090909091},
+{land:'Verenigde Staten',provincie:'Pennsylvania',plaats:'Middle Paxton Township',eerste:'2015-05-29 23:21:47',laatste:'2015-05-29 23:25:08',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:40.365,lon:-76.957},
+{land:'Verenigde Staten',provincie:'Pennsylvania',plaats:'Tioga Township',eerste:'2015-05-29 13:12:42',laatste:'2015-05-29 20:18:24',gps:6,geschat:1,totaal:7,betrouwbaarheid:45.0,lat:41.9006666666667,lon:-77.1258333333333},
+{land:'Verenigde Staten',provincie:'Pennsylvania',plaats:'West Hempfield Township',eerste:'2015-05-30 11:50:55',laatste:'2015-05-30 19:24:13',gps:2,geschat:1,totaal:3,betrouwbaarheid:29.0,lat:40.0365,lon:-76.521},
+{land:'Verenigde Staten',provincie:'Rhode Island',plaats:'Newport',eerste:'2015-05-22 00:19:11',laatste:'2015-05-22 18:14:01',gps:20,geschat:0,totaal:20,betrouwbaarheid:100.0,lat:41.4735,lon:-71.3026},
+{land:'Verenigde Staten',provincie:'Rhode Island',plaats:'Newport County',eerste:'2015-05-21 23:53:53',laatste:'2015-05-22 18:21:42',gps:14,geschat:22,totaal:36,betrouwbaarheid:47.7,lat:41.4695,lon:-71.3102857142857},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Blount County',eerste:'2015-06-06 10:19:25',laatste:'2015-06-06 20:59:51',gps:35,geschat:5,totaal:40,betrouwbaarheid:91.0,lat:35.5972285714286,lon:-83.8173714285715},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Chattanooga',eerste:'2015-06-08 02:34:43',laatste:'2015-06-08 02:34:43',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:35.018,lon:-85.379},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Franklin',eerste:'2015-06-08 14:07:32',laatste:'2015-06-08 22:33:32',gps:13,geschat:3,totaal:16,betrouwbaarheid:37.0,lat:35.917,lon:-86.874},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Gatlinburg',eerste:'2015-06-06 01:37:55',laatste:'2015-06-06 03:00:32',gps:13,geschat:0,totaal:13,betrouwbaarheid:100.0,lat:35.7108461538462,lon:-83.5186153846154},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Hamilton County',eerste:'2015-06-07 22:04:45',laatste:'2015-06-07 22:04:45',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:35.127,lon:-85.026},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Memphis',eerste:'2015-06-11 00:23:22',laatste:'2015-06-12 04:01:53',gps:57,geschat:63,totaal:120,betrouwbaarheid:86.0,lat:35.045701754386,lon:-90.0246666666666},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Nashville',eerste:'2015-06-08 18:09:02',laatste:'2015-06-10 03:05:13',gps:39,geschat:16,totaal:55,betrouwbaarheid:77.2,lat:36.1752051282051,lon:-86.758282051282},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Sevier County',eerste:'2015-06-06 22:40:42',laatste:'2015-06-06 23:36:33',gps:7,geschat:0,totaal:7,betrouwbaarheid:100.0,lat:35.5934285714286,lon:-83.4561428571429},
+{land:'Verenigde Staten',provincie:'Tennessee',plaats:'Williamson County',eerste:'2015-06-08 20:42:25',laatste:'2015-06-08 20:42:25',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:35.819,lon:-86.816},
+{land:'Verenigde Staten',provincie:'Texas',plaats:'Galveston',eerste:'2015-06-17 00:46:50',laatste:'2015-06-18 01:35:59',gps:23,geschat:10,totaal:33,betrouwbaarheid:80.9,lat:29.2441739130435,lon:-94.8653913043478},
+{land:'Verenigde Staten',provincie:'Texas',plaats:'Harris County',eerste:'2015-06-16 23:53:17',laatste:'2015-06-16 23:53:17',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:29.709,lon:-95.01},
+{land:'Verenigde Staten',provincie:'Texas',plaats:'Houston',eerste:'2015-06-18 09:29:52',laatste:'2015-06-18 17:31:31',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:29.721,lon:-95.3256666666667},
+{land:'Verenigde Staten',provincie:'Texas',plaats:'Jamaica Beach',eerste:'2015-06-17 19:19:34',laatste:'2015-06-17 19:21:59',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:29.1822,lon:-94.9732},
+{land:'Verenigde Staten',provincie:'Texas',plaats:'Orange',eerste:'2015-06-16 22:08:20',laatste:'2015-06-16 22:08:24',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:30.126,lon:-93.705},
+{land:'Verenigde Staten',provincie:'Vermont',plaats:'Marlboro',eerste:'2015-05-26 20:11:11',laatste:'2015-05-26 20:11:40',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:42.853,lon:-72.794},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Arlington',eerste:'2015-06-01 12:11:32',laatste:'2015-06-01 20:58:13',gps:34,geschat:12,totaal:46,betrouwbaarheid:40.8,lat:38.8790588235294,lon:-77.0707352941177},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Augusta County',eerste:'2015-06-03 20:05:30',laatste:'2015-06-03 20:05:30',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.193,lon:-78.757},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Carroll County',eerste:'2015-06-04 18:11:27',laatste:'2015-06-04 18:12:17',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:36.641,lon:-80.728},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Fauquier County',eerste:'2015-06-02 18:10:41',laatste:'2015-06-02 18:10:41',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.917,lon:-77.882},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Floyd County',eerste:'2015-06-04 16:52:19',laatste:'2015-06-04 16:53:01',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:36.985,lon:-80.149},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Luray',eerste:'2015-06-02 14:22:56',laatste:'2015-06-02 22:49:48',gps:23,geschat:30,totaal:53,betrouwbaarheid:30.1,lat:38.665,lon:-78.4840434782608},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Madison County',eerste:'2015-06-03 17:59:24',laatste:'2015-06-03 17:59:24',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.593,lon:-78.376},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Page County',eerste:'2015-06-02 21:08:58',laatste:'2015-06-03 18:57:05',gps:10,geschat:2,totaal:12,betrouwbaarheid:37.0,lat:38.6362,lon:-78.4097},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Rockingham County',eerste:'2015-06-03 12:51:31',laatste:'2015-06-03 19:55:33',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:38.2578,lon:-78.686},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Shenandoah County',eerste:'2015-06-02 23:14:00',laatste:'2015-06-02 23:14:13',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:38.641,lon:-78.635},
+{land:'Verenigde Staten',provincie:'Virginia',plaats:'Warren County',eerste:'2015-06-02 18:48:20',laatste:'2015-06-02 18:48:20',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:38.906,lon:-78.199},
+{land:'Zweden',provincie:'Hallands län',plaats:'Kungsbacka kommun',eerste:'2019-06-26 22:04:19',laatste:'2019-06-26 22:14:50',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:57.3072,lon:11.6568},
+{land:'Zweden',provincie:'Stockholms län',plaats:'Lidingö kommun',eerste:'2019-06-22 05:48:17',laatste:'2019-06-22 05:48:17',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:59.344,lon:18.141},
+{land:'Zweden',provincie:'Stockholms län',plaats:'Stockholm',eerste:'2019-06-22 12:27:32',laatste:'2019-06-23 18:15:28',gps:73,geschat:29,totaal:102,betrouwbaarheid:93.8,lat:59.3276575342466,lon:18.0791232876712},
+{land:'Zweden',provincie:'Stockholms län',plaats:'Stockholms kommun',eerste:'2019-06-22 07:13:50',laatste:'2019-06-22 11:50:05',gps:4,geschat:0,totaal:4,betrouwbaarheid:100.0,lat:59.274,lon:17.9085},
+{land:'Zweden',provincie:'Södermanlands län',plaats:'Eskilstuna',eerste:'2019-06-24 15:26:24',laatste:'2019-06-24 15:29:09',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:59.441,lon:16.6343333333333},
+{land:'Zweden',provincie:'Södermanlands län',plaats:'Strängnäs kommun',eerste:'2019-06-24 11:28:41',laatste:'2019-06-24 14:04:24',gps:23,geschat:11,totaal:34,betrouwbaarheid:94.9,lat:59.2936086956522,lon:17.161347826087},
+{land:'Zweden',provincie:'Västmanlands län',plaats:'Arboga kommun',eerste:'2019-06-24 16:34:46',laatste:'2019-06-24 17:01:32',gps:11,geschat:0,totaal:11,betrouwbaarheid:100.0,lat:59.3942727272727,lon:15.8439090909091},
+{land:'Zweden',provincie:'Västra Götalands län',plaats:'Ale kommun',eerste:'2019-06-26 16:55:59',laatste:'2019-06-26 17:00:14',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:57.8396666666667,lon:12.0183333333333},
+{land:'Zweden',provincie:'Västra Götalands län',plaats:'Göteborg (stad)',eerste:'2019-06-26 17:31:49',laatste:'2019-06-26 20:43:38',gps:15,geschat:1,totaal:16,betrouwbaarheid:100.0,lat:57.6937333333333,lon:11.9062},
+{land:'Zweden',provincie:'Västra Götalands län',plaats:'Lidköpings kommun',eerste:'2019-06-26 12:19:50',laatste:'2019-06-26 15:21:48',gps:36,geschat:7,totaal:43,betrouwbaarheid:73.0,lat:58.6700555555555,lon:13.2116388888889},
+{land:'Zweden',provincie:'Örebro län',plaats:'Nora kommun',eerste:'2019-06-25 14:00:29',laatste:'2019-06-25 17:00:34',gps:24,geschat:6,totaal:30,betrouwbaarheid:77.7,lat:59.5188333333333,lon:15.041375},
+{land:'Zweden',provincie:'Örebro län',plaats:'Örebro',eerste:'2019-06-24 18:18:39',laatste:'2019-06-26 10:38:05',gps:31,geschat:8,totaal:39,betrouwbaarheid:94.1,lat:59.2678709677419,lon:15.2145483870968},
+];
+
+function showTab(id, btn) {
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    btn.classList.add("active");
+
+    if (id === "kaart") {
+        setTimeout(function() { map.invalidateSize(); }, 200);
+    }
+}
+
+var map = L.map('map').setView([51.49, 5.39], 6);
+
+L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    subdomains: 'abc',
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+var clusterGroup = L.markerClusterGroup({
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: false,
+    maxClusterRadius: 45,
+    disableClusteringAtZoom: 11
+});
+
+clusterGroup.on('clusterclick', function (a) {
+    map.setView(a.layer.getLatLng(), Math.min(map.getZoom() + 2, 12));
+});
+
+var allMarkers = [];
+var bounds = [];
+
+PLAATSEN.forEach(function(p) {
+    var title = [p.plaats, p.provincie, p.land].filter(Boolean).join(", ");
+
+    var popup =
+        "<b>" + title + "</b><br>" +
+        "GPS-opnames: " + p.gps + "<br>" +
+        "Geschat via tijd: " + p.geschat + "<br>" +
+        "Totaal: " + p.totaal + "<br>" +
+        "Gem. betrouwbaarheid: " + p.betrouwbaarheid + "<br>" +
+        "Eerste: " + p.eerste + "<br>" +
+        "Laatste: " + p.laatste + "<br>" +
+        "<a target='_blank' href='https://www.google.com/maps?q=" + p.lat + "," + p.lon + "'>Open in Google Maps</a>";
+
+    var marker = L.marker([p.lat, p.lon]);
+    marker.bindPopup(popup);
+    marker.searchText = title.toLowerCase();
+    marker.avgConfidence = p.betrouwbaarheid;
+
+    allMarkers.push(marker);
+    clusterGroup.addLayer(marker);
+    bounds.push([p.lat, p.lon]);
+});
+
+map.addLayer(clusterGroup);
+
+function updateMapFilter() {
+    var q = document.getElementById('mapFilter').value.toLowerCase();
+    var minconf = parseInt(document.getElementById('minconf').value, 10);
+    document.getElementById('minconfval').innerText = minconf;
+
+    clusterGroup.clearLayers();
+    var visible = 0;
+
+    allMarkers.forEach(function(m) {
+        if ((!q || m.searchText.indexOf(q) >= 0) && m.avgConfidence >= minconf) {
+            clusterGroup.addLayer(m);
+            visible++;
+        }
+    });
+
+    document.getElementById('mapCount').innerText =
+        visible + " van " + allMarkers.length + " plaatsen zichtbaar";
+}
+
+document.getElementById('mapFilter').addEventListener('input', updateMapFilter);
+document.getElementById('minconf').addEventListener('input', updateMapFilter);
+
+if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [20, 20], maxZoom: 9 });
+}
+updateMapFilter();
+
+function renderPlaces() {
+    var q = document.getElementById('placeFilter').value.toLowerCase();
+
+    var rows = PLAATSEN
+        .filter(p => !q || (p.land + " " + p.provincie + " " + p.plaats).toLowerCase().includes(q))
+        .sort((a,b) =>
+            a.land.localeCompare(b.land) ||
+            a.provincie.localeCompare(b.provincie) ||
+            a.plaats.localeCompare(b.plaats)
+        );
+
+    document.getElementById('placesBody').innerHTML = rows.map(p =>
+        "<tr>" +
+        "<td>" + p.land + "</td>" +
+        "<td>" + p.provincie + "</td>" +
+        "<td>" + p.plaats + "</td>" +
+        "<td>" + p.totaal + "</td>" +
+        "<td>" + p.gps + "</td>" +
+        "<td>" + p.geschat + "</td>" +
+        "<td>" + p.betrouwbaarheid + "</td>" +
+        "</tr>"
+    ).join("");
+}
+
+document.getElementById('placeFilter').addEventListener('input', renderPlaces);
+renderPlaces();
+
+function renderTop() {
+    var rows = PLAATSEN
+        .slice()
+        .sort((a,b) => b.totaal - a.totaal)
+        .slice(0, 100);
+
+    document.getElementById('topBody').innerHTML = rows.map((p, i) =>
+        "<tr>" +
+        "<td>" + (i + 1) + "</td>" +
+        "<td>" + p.plaats + "</td>" +
+        "<td>" + p.provincie + "</td>" +
+        "<td>" + p.land + "</td>" +
+        "<td>" + p.totaal + "</td>" +
+        "</tr>"
+    ).join("");
+}
+renderTop();
+
+function renderStats() {
+    var totaal = PLAATSEN.reduce((s,p) => s + p.totaal, 0);
+    var gps = PLAATSEN.reduce((s,p) => s + p.gps, 0);
+    var geschat = PLAATSEN.reduce((s,p) => s + p.geschat, 0);
+
+    var landen = {};
+    var provincies = {};
+
+    PLAATSEN.forEach(function(p) {
+        if (p.land) landen[p.land] = true;
+        if (p.provincie) provincies[p.provincie] = true;
+    });
+
+    document.getElementById('statsBox').innerHTML =
+        "<div class='card'><b>Gekoppelde opnames totaal</b><br>" + totaal + "</div>" +
+        "<div class='card'><b>GPS-opnames</b><br>" + gps + "</div>" +
+        "<div class='card'><b>Geschat via tijd</b><br>" + geschat + "</div>" +
+        "<div class='card'><b>Unieke plaatsen</b><br>" + PLAATSEN.length + "</div>" +
+        "<div class='card'><b>Landen</b><br>" + Object.keys(landen).length + "</div>" +
+        "<div class='card'><b>Provincies/regio's</b><br>" + Object.keys(provincies).length + "</div>";
+}
+renderStats();
+</script>
+</body>
+</html>
