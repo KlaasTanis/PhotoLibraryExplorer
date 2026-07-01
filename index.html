@@ -13,84 +13,28 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <style>
-body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #f5f5f5;
-}
-header {
-    background: #1f2937;
-    color: white;
-    padding: 14px 18px;
-}
-nav {
-    background: white;
-    padding: 10px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    box-shadow: 0 1px 4px #ccc;
-}
-nav button {
-    padding: 9px 14px;
-    border: 0;
-    border-radius: 8px;
-    background: #e5e7eb;
-    font-size: 15px;
-}
-nav button.active {
-    background: #2563eb;
-    color: white;
-}
-section {
-    display: none;
-    padding: 14px;
-}
-section.active {
-    display: block;
-}
-#map {
-    width: 100%;
-    height: calc(100vh - 135px);
-}
-.panel {
-    background: white;
-    padding: 10px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-}
-input[type=text] {
-    width: 95%;
-    padding: 8px;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-}
-th, td {
-    border-bottom: 1px solid #ddd;
-    padding: 7px;
-    text-align: left;
-}
-th {
-    background: #eee;
-    position: sticky;
-    top: 0;
-}
-.card {
-    background: white;
-    padding: 14px;
-    border-radius: 10px;
-    margin: 10px 0;
-}
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f5; }
+header { background: #1f2937; color: white; padding: 14px 18px; }
+nav { background: white; padding: 10px; display: flex; gap: 10px; flex-wrap: wrap; box-shadow: 0 1px 4px #ccc; }
+nav button { padding: 9px 14px; border: 0; border-radius: 8px; background: #e5e7eb; font-size: 15px; }
+nav button.active { background: #2563eb; color: white; }
+section { display: none; padding: 14px; }
+section.active { display: block; }
+#map { width: 100%; height: calc(100vh - 150px); }
+.panel { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
+input[type=text] { width: 95%; padding: 8px; }
+table { width: 100%; border-collapse: collapse; background: white; }
+th, td { border-bottom: 1px solid #ddd; padding: 7px; text-align: left; }
+th { background: #eee; position: sticky; top: 0; }
+.card { background: white; padding: 14px; border-radius: 10px; margin: 10px 0; }
+.small { color: #666; font-size: 90%; }
 </style>
 </head>
 <body>
 
 <header>
-<h2>PhotoLibraryExplorer</h2>
-<div>Persoonlijke kaart van je fotobibliotheek</div>
+<h2>ð·ð PhotoLibraryExplorer</h2>
+<div>Version 7.0</div>
 </header>
 
 <nav>
@@ -98,6 +42,7 @@ th {
 <button onclick="showTab('plaatsen', this)">ð Plaatsen</button>
 <button onclick="showTab('top', this)">ð Top 100</button>
 <button onclick="showTab('stats', this)">ð Statistiek</button>
+<button onclick="showTab('about', this)">â¹ï¸ Versie</button>
 </nav>
 
 <section id="kaart" class="active">
@@ -120,9 +65,7 @@ Min. betrouwbaarheid:
 </div>
 <table>
 <thead>
-<tr>
-<th>Land</th><th>Provincie</th><th>Plaats</th><th>Totaal</th><th>GPS</th><th>Geschat</th><th>Betrouwbaarheid</th>
-</tr>
+<tr><th>Land</th><th>Provincie</th><th>Plaats</th><th>Totaal</th><th>GPS</th><th>Geschat</th><th>Betrouwbaarheid</th></tr>
 </thead>
 <tbody id="placesBody"></tbody>
 </table>
@@ -131,9 +74,7 @@ Min. betrouwbaarheid:
 <section id="top">
 <table>
 <thead>
-<tr>
-<th>#</th><th>Plaats</th><th>Provincie</th><th>Land</th><th>Totaal</th>
-</tr>
+<tr><th>#</th><th>Plaats</th><th>Provincie</th><th>Land</th><th>Totaal</th></tr>
 </thead>
 <tbody id="topBody"></tbody>
 </table>
@@ -141,6 +82,15 @@ Min. betrouwbaarheid:
 
 <section id="stats">
 <div id="statsBox"></div>
+</section>
+
+<section id="about">
+<div class="card">
+<h2>PhotoLibraryExplorer</h2>
+<p>Version 7.0</p>
+<p class="small">Ontwikkeld door Klaas Tanis met ChatGPT.</p>
+<div id="aboutBox"></div>
+</div>
 </section>
 
 <script>
@@ -242,7 +192,7 @@ var PLAATSEN = [
 {land:'Ierland',provincie:'Kenmare Municipal District',plaats:'County Kerry',eerste:'2017-06-19 12:08:24',laatste:'2017-06-23 16:26:23',gps:138,geschat:7,totaal:145,betrouwbaarheid:57.0,lat:51.9312028985507,lon:-10.1908405797101},
 {land:'Ierland',provincie:'Killarney Municipal District',plaats:'County Kerry',eerste:'2017-06-17 15:11:50',laatste:'2017-06-23 19:31:19',gps:81,geschat:27,totaal:108,betrouwbaarheid:78.1,lat:52.039962962963,lon:-9.51843209876543},
 {land:'Ierland',provincie:'Leinster',plaats:'Dublin',eerste:'2017-06-25 12:46:31',laatste:'2017-06-25 16:53:57',gps:20,geschat:10,totaal:30,betrouwbaarheid:65.7,lat:53.35295,lon:-6.2628},
-{land:'Ierland',provincie:'Munster',plaats:'Cork',eerste:'2017-06-17 13:18:14',laatste:'2017-06-17 16:00:45',gps:7,geschat:7,totaal:14,betrouwbaarheid:86.4,lat:51.9,lon:-8.47514285714286},
+{land:'Ierland',provincie:'Munster',plaats:'Cork',eerste:'2017-06-17 13:18:14',laatste:'2017-06-17 16:00:45',gps:9,geschat:7,totaal:16,betrouwbaarheid:92.9,lat:51.8997777777778,lon:-8.47511111111111},
 {land:'Ierland',provincie:'The Borough District of Wexford',plaats:'County Wexford',eerste:'2017-06-16 19:17:18',laatste:'2017-06-16 21:35:29',gps:7,geschat:2,totaal:9,betrouwbaarheid:64.5,lat:52.3398571428571,lon:-6.464},
 {land:'Ierland',provincie:'The Municipal District of Arklow',plaats:'County Wicklow',eerste:'2017-06-24 15:28:27',laatste:'2017-06-26 18:07:21',gps:17,geschat:4,totaal:21,betrouwbaarheid:75.8,lat:52.8537058823529,lon:-6.33029411764706},
 {land:'Ierland',provincie:'The Municipal District of Dungarvan — Lismore',plaats:'County Waterford',eerste:'2017-06-17 10:56:51',laatste:'2017-06-24 14:11:28',gps:18,geschat:2,totaal:20,betrouwbaarheid:87.0,lat:52.1158333333333,lon:-7.85616666666666},
@@ -477,12 +427,12 @@ var PLAATSEN = [
 {land:'Spanje',provincie:'Asturië',plaats:'Ribadesella/Ribeseya',eerste:'2019-09-18 15:03:37',laatste:'2019-09-18 15:03:53',gps:2,geschat:0,totaal:2,betrouwbaarheid:100.0,lat:43.439,lon:-5.192},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Aia',eerste:'2018-09-09 13:15:53',laatste:'2018-09-15 12:34:09',gps:30,geschat:2,totaal:32,betrouwbaarheid:72.5,lat:43.2408,lon:-2.15126666666667},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Aiarako kuadrilla',eerste:'2014-09-20 14:43:42',laatste:'2014-09-20 15:00:51',gps:3,geschat:9,totaal:12,betrouwbaarheid:67.9,lat:42.959,lon:-3.018},
-{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Anduaga',eerste:'2018-09-12 14:32:04',laatste:'2018-09-12 16:02:33',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:43.087,lon:-2.244},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Anduaga',eerste:'2018-09-12 13:46:56',laatste:'2018-09-12 15:42:20',gps:10,geschat:3,totaal:13,betrouwbaarheid:29.0,lat:43.087,lon:-2.245},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Beizama',eerste:'2018-09-12 16:24:27',laatste:'2018-09-12 16:26:56',gps:5,geschat:0,totaal:5,betrouwbaarheid:100.0,lat:43.1282,lon:-2.228},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Bilbao',eerste:'2018-09-07 14:05:29',laatste:'2022-09-20 16:43:46',gps:44,geschat:35,totaal:79,betrouwbaarheid:84.7,lat:43.2655681818182,lon:-2.93513636363636},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Deba',eerste:'2018-09-11 13:26:50',laatste:'2018-09-11 14:31:01',gps:11,geschat:3,totaal:14,betrouwbaarheid:79.7,lat:43.2991818181818,lon:-2.34381818181818},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Donostia / San Sebastián',eerste:'2018-09-03 16:47:06',laatste:'2025-05-26 14:07:33',gps:167,geschat:10,totaal:177,betrouwbaarheid:65.6,lat:43.3145688622755,lon:-2.01140718562874},
-{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Ezkio-Itsaso',eerste:'2018-09-12 13:46:56',laatste:'2018-09-12 15:42:20',gps:10,geschat:3,totaal:13,betrouwbaarheid:29.0,lat:43.087,lon:-2.245},
+{land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Ezkio-Itsaso',eerste:'2018-09-12 14:32:04',laatste:'2018-09-12 16:02:33',gps:3,geschat:0,totaal:3,betrouwbaarheid:100.0,lat:43.087,lon:-2.244},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Getaria',eerste:'2018-09-11 12:37:11',laatste:'2018-09-11 12:38:39',gps:6,geschat:0,totaal:6,betrouwbaarheid:100.0,lat:43.306,lon:-2.2105},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Hondarribia',eerste:'2017-10-02 14:41:28',laatste:'2018-09-10 16:33:55',gps:41,geschat:7,totaal:48,betrouwbaarheid:58.7,lat:43.3617073170732,lon:-1.80051219512195},
 {land:'Spanje',provincie:'Autonome Gemeenschap Baskenland',plaats:'Labastida / Bastida',eerste:'2022-09-10 11:16:53',laatste:'2022-09-10 11:16:53',gps:1,geschat:0,totaal:1,betrouwbaarheid:100.0,lat:42.582,lon:-2.819},
@@ -765,16 +715,28 @@ var PLAATSEN = [
 {land:'Zweden',provincie:'Örebro län',plaats:'Nora kommun',eerste:'2019-06-25 14:00:29',laatste:'2019-06-25 17:00:34',gps:24,geschat:6,totaal:30,betrouwbaarheid:77.7,lat:59.5188333333333,lon:15.041375},
 {land:'Zweden',provincie:'Örebro län',plaats:'Örebro',eerste:'2019-06-24 18:18:39',laatste:'2019-06-26 10:38:05',gps:31,geschat:8,totaal:39,betrouwbaarheid:94.1,lat:59.2678709677419,lon:15.2145483870968},
 ];
-
+var STATS = {
+version:'7.0',
+total_assets:36840,
+gps_count:13432,
+no_gps_count:23408,
+matched_no_gps:6436,
+unmatched_no_gps:16972,
+unique_places:619,
+country_count:16,
+province_count:91,
+cache_hits:13432,
+new_geocodes:0,
+first:'2004-06-13 23:46:08',
+last:'2026-06-27 12:23:42',
+github_url:'https://KlaasTanis.github.io/PhotoLibraryExplorer/'
+};
 function showTab(id, btn) {
     document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
     document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
     document.getElementById(id).classList.add("active");
     btn.classList.add("active");
-
-    if (id === "kaart") {
-        setTimeout(function() { map.invalidateSize(); }, 200);
-    }
+    if (id === "kaart") setTimeout(function() { map.invalidateSize(); }, 200);
 }
 
 var map = L.map('map').setView([51.49, 5.39], 6);
@@ -802,7 +764,6 @@ var bounds = [];
 
 PLAATSEN.forEach(function(p) {
     var title = [p.plaats, p.provincie, p.land].filter(Boolean).join(", ");
-
     var popup =
         "<b>" + title + "</b><br>" +
         "GPS-opnames: " + p.gps + "<br>" +
@@ -875,16 +836,11 @@ function renderPlaces() {
         "</tr>"
     ).join("");
 }
-
 document.getElementById('placeFilter').addEventListener('input', renderPlaces);
 renderPlaces();
 
 function renderTop() {
-    var rows = PLAATSEN
-        .slice()
-        .sort((a,b) => b.totaal - a.totaal)
-        .slice(0, 100);
-
+    var rows = PLAATSEN.slice().sort((a,b) => b.totaal - a.totaal).slice(0, 100);
     document.getElementById('topBody').innerHTML = rows.map((p, i) =>
         "<tr>" +
         "<td>" + (i + 1) + "</td>" +
@@ -898,27 +854,36 @@ function renderTop() {
 renderTop();
 
 function renderStats() {
-    var totaal = PLAATSEN.reduce((s,p) => s + p.totaal, 0);
-    var gps = PLAATSEN.reduce((s,p) => s + p.gps, 0);
-    var geschat = PLAATSEN.reduce((s,p) => s + p.geschat, 0);
-
-    var landen = {};
-    var provincies = {};
-
-    PLAATSEN.forEach(function(p) {
-        if (p.land) landen[p.land] = true;
-        if (p.provincie) provincies[p.provincie] = true;
-    });
-
     document.getElementById('statsBox').innerHTML =
-        "<div class='card'><b>Gekoppelde opnames totaal</b><br>" + totaal + "</div>" +
-        "<div class='card'><b>GPS-opnames</b><br>" + gps + "</div>" +
-        "<div class='card'><b>Geschat via tijd</b><br>" + geschat + "</div>" +
-        "<div class='card'><b>Unieke plaatsen</b><br>" + PLAATSEN.length + "</div>" +
-        "<div class='card'><b>Landen</b><br>" + Object.keys(landen).length + "</div>" +
-        "<div class='card'><b>Provincies/regio's</b><br>" + Object.keys(provincies).length + "</div>";
+        "<div class='card'><b>Totaal items met datum</b><br>" + STATS.total_assets + "</div>" +
+        "<div class='card'><b>GPS-opnames</b><br>" + STATS.gps_count + "</div>" +
+        "<div class='card'><b>Zonder GPS</b><br>" + STATS.no_gps_count + "</div>" +
+        "<div class='card'><b>Geschat via tijd</b><br>" + STATS.matched_no_gps + "</div>" +
+        "<div class='card'><b>Niet gekoppeld</b><br>" + STATS.unmatched_no_gps + "</div>" +
+        "<div class='card'><b>Unieke plaatsen</b><br>" + STATS.unique_places + "</div>" +
+        "<div class='card'><b>Landen</b><br>" + STATS.country_count + "</div>" +
+        "<div class='card'><b>Provincies/regio's</b><br>" + STATS.province_count + "</div>";
 }
 renderStats();
+
+function renderAbout() {
+    document.getElementById('aboutBox').innerHTML =
+        "<p><b>Totaal items met datum:</b> " + STATS.total_assets + "</p>" +
+        "<p><b>GPS-opnames:</b> " + STATS.gps_count + "</p>" +
+        "<p><b>Geschatte locaties:</b> " + STATS.matched_no_gps + "</p>" +
+        "<p><b>Unieke plaatsen:</b> " + STATS.unique_places + "</p>" +
+        "<p><b>Eerste gekoppelde opname:</b> " + STATS.first + "</p>" +
+        "<p><b>Laatste gekoppelde opname:</b> " + STATS.last + "</p>" +
+        "<p><b>Website:</b><br><a href='" + STATS.github_url + "'>" + STATS.github_url + "</a></p>" +
+        "<h3>Version history</h3>" +
+        "<ul>" +
+        "<li>7.0 - Module-structuur en opgeschoonde code</li>" +
+        "<li>6.1 - Automatisch publiceren naar GitHub Pages</li>" +
+        "<li>6.0 - EÃ©n HTML-bestand</li>" +
+        "<li>5.0 - Betrouwbaarheidsscore en tijdkoppeling</li>" +
+        "</ul>";
+}
+renderAbout();
 </script>
 </body>
 </html>
